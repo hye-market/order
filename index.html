@@ -1048,12 +1048,19 @@ async function openCustomer(name) {
 function readSheetRows(file) {
   return new Promise((resolve, reject) => {
     const fr = new FileReader();
-    fr.onload = () => { try { const wb = XLSX.read(new Uint8Array(fr.result), { type: "array" }); const ws = wb.Sheets[wb.SheetNames[0]]; resolve(XLSX.utils.sheet_to_json(ws, { defval: "", raw: true })); } catch (e) { reject(e); } };
-    fr.onerror = reject; fr.readAsArrayBuffer(file);
+    const isCsv = /\.csv$/i.test(file.name || "");
+    fr.onload = () => {
+      try {
+        // CSV는 글자 그대로 읽어요 (26-11-19 같은 값이 날짜로 바뀌지 않게, 한글 깨지지 않게)
+        const wb = isCsv ? XLSX.read(String(fr.result).replace(/^\uFEFF/, ""), { type: "string", raw: true }) : XLSX.read(new Uint8Array(fr.result), { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]]; resolve(XLSX.utils.sheet_to_json(ws, { defval: "", raw: true }));
+      } catch (e) { reject(e); }
+    };
+    fr.onerror = reject; if (isCsv) fr.readAsText(file, "utf-8"); else fr.readAsArrayBuffer(file);
   });
 }
 const pick = (row, ...keys) => { for (const k of keys) if (row[k] !== undefined && row[k] !== "") return row[k]; return ""; };
-const yes = (v) => { const s = String(v).trim(); return v === true || ["✅", "O", "o", "Y", "y", "입금", "예", "TRUE", "true", "1", "카드", "✔"].includes(s); };
+const yes = (v) => { const s = String(v).trim(); return v === true || ["✅", "O", "o", "Y", "y", "입금", "예", "TRUE", "true", "True", "t", "1", "카드", "✔"].includes(s); };
 function normDate(v) {
   if (typeof v === "number" && v > 20000 && v < 80000) { const d = new Date(Math.round((v - 25569) * 86400000)); return `${String(d.getUTCFullYear()).slice(2)}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`; }
   const s = String(v).trim().replace(/[./]/g, "-").replace(/\s+/g, "");
@@ -1062,19 +1069,20 @@ function normDate(v) {
   return "";
 }
 const sig = (o) => [o.date, o.customerName, o.productNumber, o.size || "", Number(o.quantity), Number(o.unitPrice)].join("|");
-async function importOrders(file) {
+async function importOrders(file, preRows) {
   await ensureAllLoaded("겹치는 주문을 찾으려고 모든 주문 불러오는 중");
-  let rows; try { rows = await readSheetRows(file); } catch { toast("엑셀 파일을 읽지 못했어요", "err"); return; }
+  let rows = preRows; if (!rows) { try { rows = await readSheetRows(file); } catch { toast("엑셀 파일을 읽지 못했어요", "err"); return; } }
   const parsed = [], bad = [];
   rows.forEach((r, i) => {
-    const name = String(pick(r, "고객명", "고객", "이름")).trim();
+    const name = String(pick(r, "고객명", "고객", "이름", "customer_name")).trim();
     if (!name) return; // 정산 요약 줄 등
-    const rawDate = pick(r, "날짜", "주문일", "일자");
+    const rawDate = pick(r, "날짜", "주문일", "일자", "date");
     const date = normDate(rawDate);
     if (!date) { if (/^(정산|총합계|입금액|미입금액|합계)/.test(String(rawDate).trim()) || /^[\d,.\s-]+$/.test(name)) return; bad.push(i + 2); return; }
-    parsed.push({ date, customerName: name, productNumber: String(pick(r, "상품/품목", "상품", "품목", "상품번호")).trim(), size: String(pick(r, "사이즈", "옵션")).trim(),
-      quantity: Math.max(1, Number(pick(r, "수량")) || 1), unitPrice: Math.max(0, Number(String(pick(r, "단가", "가격")).replace(/[^\d.-]/g, "")) || 0),
-      isPaid: yes(pick(r, "입금여부", "입금")) || yes(pick(r, "카드")), isCard: yes(pick(r, "카드")) });
+    const ca = Date.parse(String(pick(r, "created_at")).replace(" ", "T"));
+    parsed.push({ date, customerName: name, productNumber: String(pick(r, "상품/품목", "상품", "품목", "상품번호", "product_number")).trim(), size: String(pick(r, "사이즈", "옵션", "size")).trim(),
+      quantity: Math.max(1, Number(pick(r, "수량", "quantity")) || 1), unitPrice: Math.max(0, Number(String(pick(r, "단가", "가격", "unit_price")).replace(/[^\d.-]/g, "")) || 0), _ca: isNaN(ca) ? 0 : ca,
+      isPaid: yes(pick(r, "입금여부", "입금", "is_paid")) || yes(pick(r, "카드", "is_card")), isCard: yes(pick(r, "카드", "is_card")) });
   });
   if (!parsed.length) { toast("불러올 주문을 찾지 못했어요. '고객명'과 '날짜' 칸이 있는 엑셀인지 확인해 주세요", "err", 5000); return; }
   const existing = new Map(); S.orders.forEach((o) => { const k = sig(o); existing.set(k, (existing.get(k) || 0) + 1); });
@@ -1086,12 +1094,13 @@ async function importOrders(file) {
     message: `파일에서 주문 ${parsed.length}건을 찾았어요.\n· 새로 넣을 주문: ${fresh.length}건${fresh.length ? ` (${dates[0]} ~ ${dates[dates.length - 1]})` : ""}\n· 합계: ${won(total)}\n· 이미 있는 똑같은 주문(건너뜀): ${dup}건${bad.length ? `\n· 날짜를 못 읽은 줄(건너뜀): ${bad.length}줄` : ""}` });
   if (!ok || !fresh.length) return;
   const base = Date.now();
-  try { await api.addOrders(fresh.map((o, i) => ({ ...o, createdAt: base + i })), "주문 불러오는 중"); toast(`주문 ${fresh.length}건을 불러왔어요 ✅`, "ok", 3500); S.showAll = true; }
+  fresh.sort((a, b) => (a._ca || 0) - (b._ca || 0));
+  try { await api.addOrders(fresh.map((o, i) => ({ ...o, createdAt: o._ca || base + i })), "주문 불러오는 중"); toast(`주문 ${fresh.length}건을 불러왔어요 ✅`, "ok", 3500); S.showAll = true; }
   catch (e) { console.error(e); toast(errMsg(e) + " (일부만 들어갔을 수 있어요. 다시 불러오면 이미 들어간 주문은 건너뛰어요)", "err", 6000); }
   finally { busy(null); api.flush(); }
 }
-async function importTotals(file) {
-  let rows; try { rows = await readSheetRows(file); } catch { toast("엑셀 파일을 읽지 못했어요", "err"); return; }
+async function importTotals(file, preRows) {
+  let rows = preRows; if (!rows) { try { rows = await readSheetRows(file); } catch { toast("엑셀 파일을 읽지 못했어요", "err"); return; } }
   const m = {};
   rows.forEach((r) => { const name = String(pick(r, "고객명", "고객", "이름")).trim(); const t = Number(String(pick(r, "합계", "총합계", "누적", "금액")).replace(/[^\d.-]/g, "")); if (name && !isNaN(t)) m[name] = (m[name] || 0) + t; });
   const names = Object.keys(m);
@@ -1192,20 +1201,56 @@ function openHelp() {
     bodyHTML: `<div class="row" id="helpTabs" style="gap:6px;margin-bottom:6px"></div><div id="helpBody" style="max-height:58vh;overflow:auto"></div>`,
     onMount: (r) => { r.querySelector(".modal").style.maxWidth = "560px"; draw(r); r.querySelector("#helpTabs").addEventListener("click", (e) => { const b = e.target.closest("[data-help]"); if (b) { cur = b.dataset.help; draw(r); } }); } });
 }
+async function importArchive(rows) {
+  // 예전 혜마켓오더의 customer_totals_archive (지난 누적 기록) → 그대로 옮겨요
+  const m = {};
+  rows.forEach((r) => { const n = String(pick(r, "customer_name")).trim(); const t = Number(String(pick(r, "total")).replace(/[^\d.-]/g, "")); if (n && !isNaN(t)) m[n] = (m[n] || 0) + t; });
+  const list = Object.entries(m);
+  if (!list.length) { toast("누적 기록을 찾지 못했어요", "err"); return; }
+  const sum = list.reduce((s, [, t]) => s + t, 0);
+  const ok = await modal({ title: "📥 지난 누적 기록 옮기기", okText: `${list.length}명 저장`,
+    message: `예전 앱의 「지난 누적 기록」 ${list.length}명 (합계 ${won(sum)})을 찾았어요.\n\n이 금액은 이미 지운(월초기화한) 주문들의 합계예요.\n저장하면 「고객별 총 누적 합계」 = 지난 기록 + 지금 주문 으로 예전 앱과 똑같아져요.\n※ 같은 고객의 기존 기록은 이 값으로 바뀌어요 (두 번 해도 두 번 더해지지 않아요).` });
+  if (!ok) return;
+  try { busy("누적 기록 저장 중"); await api.upsertCust(list.map(([customerName, total]) => ({ customerName, total }))); toast(`고객 ${list.length}명의 지난 누적 기록을 옮겼어요 ✅`, "ok", 3500); }
+  catch (e) { console.error(e); toast(errMsg(e), "err"); }
+  finally { busy(null); }
+}
+async function importSalesArchive(rows) {
+  const list = rows.map((r) => ({ monthKey: String(pick(r, "month_key")).trim(), day: Number(pick(r, "day")), total: Number(String(pick(r, "total")).replace(/[^\d.-]/g, "")) }))
+    .filter((r) => /^\d{4}-\d{2}$/.test(r.monthKey) && r.day >= 1 && r.day <= 31 && !isNaN(r.total));
+  if (!list.length) { toast("매출표 기록을 찾지 못했어요", "err"); return; }
+  const ok = await modal({ title: "📥 매출표 기록 옮기기", okText: `${list.length}일 저장`,
+    message: `예전 앱의 매출표(그래프) 기록 ${list.length}일치를 찾았어요.\n(${list.map((r) => r.monthKey).sort()[0]} ~ ${list.map((r) => r.monthKey).sort().pop()})\n같은 날짜 기록은 이 값으로 바뀌어요.` });
+  if (!ok) return;
+  try { busy("매출표 저장 중"); await api.upsertSales(list); toast(`매출표 ${list.length}일치를 옮겼어요 ✅`, "ok", 3500); }
+  catch (e) { console.error(e); toast(errMsg(e), "err"); }
+  finally { busy(null); }
+}
+async function importAuto(file) {
+  let rows; try { rows = await readSheetRows(file); } catch { toast("파일을 읽지 못했어요. 엑셀(.xlsx)이나 CSV 파일인지 확인해 주세요", "err", 4500); return; }
+  const keys = new Set(rows.slice(0, 5).flatMap((r) => Object.keys(r)));
+  const has = (...k) => k.every((x) => keys.has(x));
+  if (has("month_key", "day", "total")) return importSalesArchive(rows);
+  if (has("customer_name", "total") && !keys.has("date")) return importArchive(rows);
+  if ((keys.has("고객명") || keys.has("customer_name")) && (keys.has("날짜") || keys.has("date"))) return importOrders(file, rows);
+  if (keys.has("고객명") && (keys.has("합계") || keys.has("총합계"))) return importTotals(file, rows);
+  toast("어떤 파일인지 알아보지 못했어요. 주문 엑셀·누적 합계 엑셀·예전 앱 CSV 중 하나를 골라 주세요", "err", 5000);
+}
 async function openImport() {
   if (!window.XLSX) { toast("엑셀 도구를 불러오지 못했어요. 새로고침해 주세요", "err"); return; }
   const body = `<div style="display:flex;flex-direction:column;gap:12px;font-size:13px;line-height:1.55">
-    <div class="card" style="padding:12px;box-shadow:none"><b>① 주문 엑셀</b><div class="muted" style="font-size:12px;margin:4px 0 8px">예전 혜마켓오더에서 <b>「전체 날짜 보기」</b>를 누른 뒤 <b>엑셀</b> 버튼으로 받은 파일 (HYE_DATA.xlsx)<br>똑같은 주문은 자동으로 건너뛰어요.</div><input type="file" id="impOrders" accept=".xlsx,.xls,.csv"></div>
-    <div class="card" style="padding:12px;box-shadow:none"><b>② 고객별 총 누적 합계 엑셀</b><div class="muted" style="font-size:12px;margin:4px 0 8px">「👥 고객별 총 누적 합계」 칸의 엑셀 버튼으로 받은 파일 — VIP 등급이 이어지게 해줘요. <b>①을 먼저</b> 해 주세요.</div><input type="file" id="impTotals" accept=".xlsx,.xls,.csv"></div>
+    <div class="card" style="padding:12px;box-shadow:none"><b>📂 파일 고르기</b> <span class="muted" style="font-size:12px">(엑셀·CSV 모두 돼요, 어떤 파일인지 자동으로 알아봐요)</span>
+      <div style="margin-top:8px"><input type="file" id="impAny" accept=".xlsx,.xls,.csv"></div></div>
+    <div class="muted" style="font-size:12px">
+      <b>예전 혜마켓오더(러버블)에서 옮길 때</b> — 러버블 데이터베이스의 「CSV 내보내기」 파일 3개를 <b>이 순서로</b> 올려요<br>
+      ① <b>orders</b> (주문) → ② <b>customer_totals_archive</b> (지난 누적 기록) → ③ <b>sales_archive</b> (매출표)<br><br>
+      <b>엑셀로 옮길 때</b> — ① 「전체 날짜 보기」 후 받은 주문 엑셀 → ② 「고객별 총 누적 합계」 엑셀<br><br>
+      똑같은 주문은 자동으로 건너뛰어서, 같은 파일을 두 번 올려도 괜찮아요.</div>
   </div>`;
   let chosen = null;
-  await modal({ title: "📥 엑셀 불러오기", bodyHTML: body, okText: "닫기", cancelText: null,
-    onMount: (r) => {
-      r.querySelector("#impOrders").addEventListener("change", (e) => { chosen = ["o", e.target.files[0]]; r.querySelector("#mOk").click(); });
-      r.querySelector("#impTotals").addEventListener("change", (e) => { chosen = ["t", e.target.files[0]]; r.querySelector("#mOk").click(); });
-    } });
-  if (!chosen || !chosen[1]) return;
-  if (chosen[0] === "o") await importOrders(chosen[1]); else await importTotals(chosen[1]);
+  await modal({ title: "📥 불러오기", bodyHTML: body, okText: "닫기", cancelText: null,
+    onMount: (r) => { r.querySelector("#impAny").addEventListener("change", (e) => { chosen = e.target.files[0]; r.querySelector("#mOk").click(); }); } });
+  if (chosen) await importAuto(chosen);
 }
 
 /* ───────── actions ───────── */

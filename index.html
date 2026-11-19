@@ -24,6 +24,7 @@ window.LIVE_ORDER_CONFIG = {
   supabaseUrl: "https://pderfthftwkemhyxwrzx.supabase.co",
   supabaseAnonKey: "sb_publishable_fhfbUFfz6MUVbF2yGutuIw_mPk9eSlu",
   loginDomain: "liveorder.local",
+  dbLimitMB: 500,   // 수파베이스 무료 요금제 저장 공간(MB)
 };
 </script>
 <style>
@@ -307,13 +308,17 @@ td.amt{color:var(--primary);font-weight:600}
     </section>
   </div>
 
-  <div class="row" style="max-width:640px">
+  <div class="row" style="max-width:900px">
     <button class="btn" id="bAllDates" style="height:36px"></button>
+    <label class="row muted" style="gap:4px;font-size:12px" title="주문이 많을 때 앱을 빨리 열려면 최근 기간만 불러와요. 고객별 총 누적 합계는 항상 전체 기준이에요.">
+      불러오기 <select class="inp" id="loadRange" style="width:auto;height:36px;padding:0 6px">
+        <option value="3">최근 3개월</option><option value="6">최근 6개월</option><option value="12">최근 1년</option><option value="all">전체</option></select></label>
     <div style="position:relative;flex:1;min-width:160px">
       <input class="inp" id="search" placeholder="🔍 고객 검색..." style="padding-left:12px">
     </div>
     <button class="btn hide" id="bClearSearch" style="height:36px"><span class="always" style="display:inline">전체보기</span></button>
   </div>
+  <div id="rangeNote" class="muted hide" style="font-size:12px;margin-top:-6px"></div>
 
   <section class="card" id="tableCard">
     <div class="row between pad" style="border-bottom:1px solid var(--border)">
@@ -377,7 +382,6 @@ function nameKey(name) {
   if (h.length > 180) { let x = 0; for (const c of h) x = (x * 31 + c.charCodeAt(0)) >>> 0; h = h.slice(0, 170) + "_" + x.toString(36); }
   return h;
 }
-const MAX_ORDERS = 20000;
 const TRASH_DAYS = 30;
 const COLORS = { gold: "#d9a92e", pink: "#e8709a", mint: "#2fb59a", blue: "#3b82f6", green: "#2e9e4f", purple: "#8b5cf6", coral: "#f0705a" };
 const INKS = { gold: "#1a1306", pink: "#2a0612", mint: "#03201a", blue: "#ffffff", green: "#ffffff", purple: "#ffffff", coral: "#2a0a04" };
@@ -411,19 +415,50 @@ function toOrder(o) {
   return r;
 }
 async function q(p) { const { data, error } = await p; if (error) throw error; return data; }
-async function selectAll(table, order) {
+async function selectAll(table, order, filter) {
   const out = []; let from = 0;
   for (;;) {
     let qq = sb.from(table).select("*").range(from, from + 999);
+    if (filter) qq = filter(qq);
     if (order) qq = qq.order(order, { ascending: true });
     const d = await q(qq); out.push(...(d || []));
     if (!d || d.length < 1000) break; from += 1000;
   }
   return out;
 }
+const RANGE_KEY = "lo-load-range";
+function rangeMonths() { const v = lsGet(RANGE_KEY, "3"); return v === "all" ? 0 : Number(v) || 0; }
+function rangeCutoff() {
+  const n = rangeMonths(); if (!n) return null;
+  const d = new Date(); const c = new Date(d.getFullYear(), d.getMonth() - (n - 1), 1);
+  return toShort(c);
+}
+let usageT = 0;
+async function loadUsage(force) {
+  if (!force && Date.now() - usageT < 30000) return; usageT = Date.now();
+  try { const u = await q(sb.rpc("storage_usage")); if (u) { S.usage = u; render(); } } catch (e) { console.warn("storage_usage 없음", e); }
+}
+async function ensureAllLoaded(reason) {
+  if (S.allLoaded || !S.cutoff) return;
+  busy(reason || "전체 주문 불러오는 중");
+  try { S.allLoaded = true; await loaders.orders(); render(); toast("지난 주문까지 모두 불러왔어요"); }
+  finally { busy(null); }
+}
 const chunk = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
 const loaders = {
-  orders: async () => { S.orders = (await selectAll("orders", "created_at")).map(fromOrder); },
+  orders: async () => {
+    const cut = S.allLoaded ? null : rangeCutoff();
+    S.cutoff = cut;
+    S.orders = (await selectAll("orders", "created_at", cut ? (qq) => qq.gte("date", cut) : null)).map(fromOrder);
+    // 불러오지 않은 지난 주문은 서버에서 고객별 합계만 받아와요 (총 누적 합계가 정확하도록)
+    const older = {}; let olderCount = 0;
+    if (cut) {
+      try { (await q(sb.rpc("order_totals_before", { cutoff: cut }))).forEach((r) => { older[r.customer_name] = Number(r.total) || 0; olderCount += Number(r.cnt) || 0; }); }
+      catch (e) { console.warn("order_totals_before 없음", e); }
+    }
+    S.olderTotals = older; S.olderCount = olderCount;
+    loadUsage();
+  },
   customer_totals: async () => { S.custArchive = (await selectAll("customer_totals")).map((r) => ({ customerName: r.customer_name, total: Number(r.total) || 0 })); },
   sales_archive: async () => { S.salesRaw = (await selectAll("sales_archive")).map((r) => ({ monthKey: r.month_key, day: Number(r.day), total: Number(r.total) || 0 })); },
   memos: async () => { const m = {}; (await selectAll("memos")).forEach((r) => { m[r.date] = r.text || ""; }); S.memos = m; },
@@ -588,6 +623,7 @@ function derive() {
   const scope = S.showAll ? o : daily;
   const grand = {};
   S.custArchive.forEach((a) => { grand[a.customerName] = (grand[a.customerName] || 0) + (Number(a.total) || 0); });
+  Object.entries(S.olderTotals || {}).forEach(([n, t]) => { grand[n] = (grand[n] || 0) + t; });
   o.forEach((x) => { grand[x.customerName] = (grand[x.customerName] || 0) + amt(x); });
   let filtered = S.showAll ? o : daily;
   if (S.search) filtered = filtered.filter((x) => String(x.customerName).includes(S.search));
@@ -642,10 +678,14 @@ function renderMetrics(D) {
 }
 function renderFormMeta() {
   $("#calLabel").textContent = S.formDate;
-  const pct = Math.min(100, (S.orders.length / MAX_ORDERS) * 100);
-  $("#ring").style.background = `conic-gradient(var(--primary) ${pct * 3.6}deg, var(--card2) 0deg)`;
-  $("#ringTxt").textContent = pct < 1 ? "<1%" : Math.round(pct) + "%";
-  $("#usageTxt").textContent = `입력 ${S.orders.length.toLocaleString()} / 최대 ${MAX_ORDERS.toLocaleString()}`;
+  const limit = (Number(CFG.dbLimitMB) || 500) * 1024 * 1024;
+  const used = S.usage ? Number(S.usage.db_bytes) || 0 : 0;
+  const pct = Math.min(100, (used / limit) * 100);
+  const total = S.usage && S.usage.orders != null ? Number(S.usage.orders) : S.orders.length + (S.olderCount || 0);
+  $("#ring").style.background = `conic-gradient(${pct > 85 ? "var(--danger)" : "var(--primary)"} ${pct * 3.6}deg, var(--card2) 0deg)`;
+  $("#ringTxt").textContent = !S.usage ? "–" : pct < 1 ? "<1%" : Math.round(pct) + "%";
+  $("#usageTxt").textContent = S.usage ? `저장 공간 ${(used / 1048576).toFixed(1)}MB / ${CFG.dbLimitMB || 500}MB · 주문 ${total.toLocaleString()}건` : `주문 ${total.toLocaleString()}건`;
+  $("#ring").title = S.usage ? `수파베이스 무료 저장 공간 ${CFG.dbLimitMB || 500}MB 중 ${(used / 1048576).toFixed(1)}MB 사용 (${pct.toFixed(1)}%)\n85%가 넘으면 빨간색으로 바뀌어요. 전체 백업 후 월초기화로 정리하세요.` : "";
   if (!$("#cal").classList.contains("hide")) renderCal();
 }
 let memoShownFor = null;
@@ -657,6 +697,10 @@ function renderMemo() {
 function renderFilters(D) {
   $("#bAllDates").innerHTML = `<span class="always" style="display:inline">🗓 ${S.showAll ? "선택 날짜만 보기" : "전체 날짜 보기"}</span>`;
   $("#bClearSearch").classList.toggle("hide", !S.search);
+  const rs = $("#loadRange"); const rv = lsGet(RANGE_KEY, "3"); if (rs.value !== rv) rs.value = rv;
+  const note = $("#rangeNote");
+  if (S.cutoff && !S.allLoaded && S.olderCount) { note.classList.remove("hide"); note.innerHTML = `📂 ${esc(shortToFull(S.cutoff))} 이전 주문 ${S.olderCount.toLocaleString()}건은 불러오지 않았어요 (누적 합계에는 포함). <button type="button" class="linkbtn" id="bLoadAll">이번만 전체 불러오기</button>`; }
+  else note.classList.add("hide");
   $("#listCount").textContent = `${D.sorted.length}건 · ${S.showAll ? "전체 날짜" : S.dateFilter}`;
 }
 function renderTable(D) {
@@ -802,6 +846,7 @@ function renderCal() {
   cal.innerHTML = `<div class="head"><button type="button" class="ib" data-calnav="-1">‹</button><span>${y}년 ${m + 1}월</span><button type="button" class="ib" data-calnav="1">›</button></div><div class="grid">${g}</div><div style="text-align:right;margin-top:6px"><button type="button" class="btn sm" data-day="${today}"><span class="always" style="display:inline">오늘</span></button></div>`;
 }
 function setDate(full) {
+  if (S.cutoff && !S.allLoaded && fullToShort(full) < S.cutoff) ensureAllLoaded("지난 날짜라서 전체 주문을 불러오는 중");
   S.formDate = full; S.dateFilter = fullToShort(full); S.showAll = false; S.calMonth = null;
   $("#cal").classList.add("hide"); render(); $("#fName").focus();
 }
@@ -923,6 +968,7 @@ async function backupDay() {
   await saveWorkbook(wb, `${fileTag()}_백업_${shortToFull(date)}.xlsx`);
 }
 async function backupAll() {
+  await ensureAllLoaded("전체 백업을 위해 모든 주문 불러오는 중");
   const all = [...S.orders].sort((a, b) => cmp(a.date, b.date) || cmp(a.customerName, b.customerName));
   const wb = ordersWorkbook(all, "전체주문");
   const D = derive();
@@ -948,7 +994,7 @@ function custStats(name) {
   const mine = S.orders.filter((o) => o.customerName === name);
   const month = monthOf(S.dateFilter);
   const arch = S.custArchive.find((c) => c.customerName === name);
-  const grand = (arch ? Number(arch.total) || 0 : 0) + mine.reduce((s, o) => s + amt(o), 0);
+  const grand = (arch ? Number(arch.total) || 0 : 0) + ((S.olderTotals || {})[name] || 0) + mine.reduce((s, o) => s + amt(o), 0);
   const monthTotal = mine.filter((o) => monthOf(o.date) === month).reduce((s, o) => s + amt(o), 0);
   const unpaid = mine.filter((o) => !o.isPaid && !o.isCard).reduce((s, o) => s + amt(o), 0);
   const last = mine.map((o) => o.date).sort().pop() || "";
@@ -1017,6 +1063,7 @@ function normDate(v) {
 }
 const sig = (o) => [o.date, o.customerName, o.productNumber, o.size || "", Number(o.quantity), Number(o.unitPrice)].join("|");
 async function importOrders(file) {
+  await ensureAllLoaded("겹치는 주문을 찾으려고 모든 주문 불러오는 중");
   let rows; try { rows = await readSheetRows(file); } catch { toast("엑셀 파일을 읽지 못했어요", "err"); return; }
   const parsed = [], bad = [];
   rows.forEach((r, i) => {
@@ -1215,6 +1262,7 @@ async function markAllPaid() {
   finally { busy(null); api.flush(); }
 }
 async function deleteAll() {
+  await ensureAllLoaded();
   const all = [...S.orders];
   if (!all.length) { toast("삭제할 주문이 없어요", "warn"); return; }
   const ok = await modal({ title: "모든 주문을 삭제할까요?", message: `주문 ${all.length}건이 모두 삭제돼요.\n먼저 전체 주문을 엑셀로 저장한 뒤 삭제해요.\n고객별 총 누적 합계와 이번 달 매출표는 보관돼요.\n\n계속하려면 아래에 "삭제"라고 입력하세요.`, okText: "엑셀 저장 후 삭제", danger: true, requireText: "삭제" });
@@ -1231,6 +1279,7 @@ async function deleteAll() {
 }
 async function resetAll() {
   if (!(await modal({ title: "모든 데이터를 초기화할까요?", message: "주문과 매출표가 모두 지워져요.\n(고객별 총 누적 합계는 유지됩니다)\n\n계속하려면 \"초기화\"라고 입력하세요.", okText: "초기화", danger: true, requireText: "초기화" }))) return;
+  await ensureAllLoaded();
   const all = [...S.orders];
   try { if (all.length) await archiveCustomerTotals(all); }
   catch (e) { console.error(e); busy(null); api.flush(); toast(ARCHIVE_FAIL, "err", 4000); return; }
@@ -1363,6 +1412,8 @@ function bind() {
   $("#bCostImport").addEventListener("click", () => { if (!window.XLSX) { toast("엑셀 도구를 불러오지 못했어요", "err"); return; } pickFile(".xlsx,.xls,.csv", importCosts); });
   $("#bHelp").addEventListener("click", openHelp);
   $("#bLogout").addEventListener("click", logout);
+  $("#loadRange").addEventListener("change", async (e) => { lsSet(RANGE_KEY, e.target.value); S.allLoaded = false; busy("주문 불러오는 중"); try { await loaders.orders(); } catch (err) { toast(errMsg(err), "err"); } finally { busy(null); render(); } });
+  document.addEventListener("click", (e) => { if (e.target && e.target.id === "bLoadAll") ensureAllLoaded(); });
   $("#bBackup").addEventListener("click", openBackup);
   $("#fName").addEventListener("input", renderCustHint);
   $("#bTrash").addEventListener("click", openTrash);

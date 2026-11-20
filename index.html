@@ -388,7 +388,8 @@ const TRASH_DAYS = 30;
 const COLORS = { gold: "#d9a92e", pink: "#e8709a", mint: "#2fb59a", blue: "#3b82f6", green: "#2e9e4f", purple: "#8b5cf6", coral: "#f0705a" };
 const INKS = { gold: "#1a1306", pink: "#2a0612", mint: "#03201a", blue: "#ffffff", green: "#ffffff", purple: "#ffffff", coral: "#2a0a04" };
 const DEFAULT_TEMPLATE = "{고객}님 안녕하세요 😊\n{날짜} 주문하신 내역이에요.\n{내역}\n\n총 {금액} 입금 부탁드려요 🙏\n{계좌}";
-const DEFAULT_CONFIG = { storeName: "", color: "gold", profitRate: 20, vipLine: 500000, cardFee: 0, shipFee: 0, packFee: 0, bank: "", account: "", holder: "", template: DEFAULT_TEMPLATE };
+const DEFAULT_YEAR_TEMPLATE = "{고객}님 안녕하세요.\n거파금액이 확인되어 앞으로 거래가 제한됨을 알려드립니다.\n\n{내역}\n\n거파금액 합계: {금액}\n{계좌}";
+const DEFAULT_CONFIG = { storeName: "", color: "gold", profitRate: 20, vipLine: 500000, cardFee: 0, shipFee: 0, packFee: 0, bank: "", account: "", holder: "", template: DEFAULT_TEMPLATE, templateYear: DEFAULT_YEAR_TEMPLATE };
 
 /* ───────── state ───────── */
 const S = {
@@ -755,7 +756,7 @@ function panel(key, title, data, { grade = false, check = false, excel = null, c
   const sorted = [...data].sort((a, b) => (b.total || 0) - (a.total || 0));
   const exp = !!S.expanded[key]; const vis = exp ? sorted : sorted.slice(0, 10);
   const checked = check ? new Set(lsGet("lo-check-" + key + "-" + S.dateFilter, [])) : null;
-  let h = `<section class="card pad"><div class="row between"><h2 class="ttl">${title}</h2>${excel && sorted.length ? `<button class="btn sm" data-act="pexcel" data-key="${key}"><span class="always" style="display:inline">⬇ 엑셀</span></button>` : ""}${copy && sorted.length ? `<button class="btn sm primary" data-act="unpaidall"><span class="always" style="display:inline">📋 ${sorted.length}명 한 번에</span></button>` : ""}</div>`;
+  let h = `<section class="card pad"><div class="row between"><h2 class="ttl">${title}</h2>${excel && sorted.length ? `<button class="btn sm" data-act="pexcel" data-key="${key}"><span class="always" style="display:inline">⬇ 엑셀</span></button>` : ""}${copy && sorted.length ? `<button class="btn sm primary" data-act="unpaidall"><span class="always" style="display:inline">📋 ${sorted.length}명 한 번에</span></button>` : ""}${copyYear && sorted.length ? `<button class="btn sm primary" data-act="yearunpaidall"><span class="always" style="display:inline">📋 ${sorted.length}명 한 번에</span></button>` : ""}</div>`;
   if (!sorted.length) h += `<p class="muted" style="text-align:center;padding:14px 0;margin:0">데이터 없음</p>`;
   else {
     h += `<div class="list">`;
@@ -912,24 +913,27 @@ function unpaidText(name) {
   return tpl.replaceAll("{고객}", name).replaceAll("{날짜}", S.showAll ? "그동안" : S.dateFilter).replaceAll("{내역}", items).replaceAll("{금액}", won(total)).replaceAll("{계좌}", acc);
 }
 
-function openUnpaidAll() {
+function openUnpaidAll(mode = "day") {
   const D = derive();
-  const list = [...D.unpaidCust].sort((a, b) => cmp(a.customerName, b.customerName));
+  const year = mode === "year";
+  const yy = String(S.dateFilter || toShort(new Date())).slice(0, 2);
+  const list = [...(year ? yearUnpaidRows() : D.unpaidCust)].sort((a, b) => cmp(a.customerName, b.customerName));
   if (!list.length) { toast("미입금 고객이 없어요 🎉"); return; }
-  const done = new Set(lsGet("lo-unpaid-sent-" + (S.showAll ? "all" : S.dateFilter), []));
-  const texts = Object.fromEntries(list.map((c) => [c.customerName, unpaidText(c.customerName)]));
+  const key = year ? "lo-yearunpaid-sent-20" + yy : "lo-unpaid-sent-" + (S.showAll ? "all" : S.dateFilter);
+  const done = new Set(lsGet(key, []));
+  const texts = Object.fromEntries(list.map((c) => [c.customerName, year ? yearUnpaidText(c.customerName) : unpaidText(c.customerName)]));
   const total = list.reduce((s, c) => s + c.total, 0);
-  const body = `<div class="muted" style="font-size:12.5px;margin-bottom:10px">${S.showAll ? "전체 날짜" : S.dateFilter} 미입금 ${list.length}명 · 합계 <b class="c-danger">${won(total)}</b><br>고객마다 「복사」를 누르고 카톡에 붙여넣어 보내세요. 보낸 고객은 ✓ 표시가 남아요.</div>
+  const label = year ? `20${yy}년 누적 미입금(거파)` : `${S.showAll ? "전체 날짜" : S.dateFilter} 미입금`;
+  const body = `<div class="muted" style="font-size:12.5px;margin-bottom:10px">${label} ${list.length}명 · 합계 <b class="c-danger">${won(total)}</b><br>고객마다 「복사」를 누르고 카톡에 붙여넣어 보내세요. 보낸 고객은 ✓ 표시가 남아요.${year ? "<br>문구는 ⚙ 설정 → 「누적 미입금(거파) 안내 문구」에서 바꿀 수 있어요." : ""}</div>
     <div id="uaList" style="display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow:auto">${list.map((c) => `<div class="card" style="padding:10px 12px;box-shadow:none" data-row="${esc(c.customerName)}">
       <div class="row between"><b>${done.has(c.customerName) ? "✓ " : ""}${esc(c.customerName)} <span class="c-primary" style="font-weight:700">${won(c.total)}</span></b>
       <button type="button" class="btn sm ${done.has(c.customerName) ? "" : "primary"}" data-ua="${esc(c.customerName)}"><span class="always" style="display:inline">${done.has(c.customerName) ? "다시 복사" : "📋 복사"}</span></button></div>
       <details style="margin-top:6px"><summary class="muted" style="font-size:12px;cursor:pointer">문구 미리보기</summary><pre style="white-space:pre-wrap;font-family:inherit;font-size:12.5px;margin:6px 0 0;color:var(--muted)">${esc(texts[c.customerName])}</pre></details></div>`).join("")}</div>
     <button type="button" class="btn sm" id="uaAll" style="margin-top:10px"><span class="always" style="display:inline">📄 전체를 한 문서로 복사 (단체방·기록용)</span></button>
     <button type="button" class="btn sm" id="uaReset" style="margin-top:10px"><span class="always" style="display:inline">✓ 표시 지우기</span></button>`;
-  modal({ title: "📋 미입금 안내 한 번에", bodyHTML: body, okText: "닫기", cancelText: null,
+  modal({ title: year ? "📌 누적 미입금(거파) 안내 한 번에" : "📋 미입금 안내 한 번에", bodyHTML: body, okText: "닫기", cancelText: null,
     onMount: (r) => {
       r.querySelector(".modal").style.maxWidth = "560px";
-      const key = "lo-unpaid-sent-" + (S.showAll ? "all" : S.dateFilter);
       r.querySelector("#uaList").addEventListener("click", (e) => {
         const b = e.target.closest("[data-ua]"); if (!b) return;
         const n = b.dataset.ua; copyText(texts[n], `${n}님 문구를 복사했어요`);
@@ -938,7 +942,7 @@ function openUnpaidAll() {
         const t = b.parentElement.querySelector("b"); if (t && !t.textContent.startsWith("✓")) t.insertAdjacentText("afterbegin", "✓ ");
       });
       r.querySelector("#uaAll").addEventListener("click", () => copyText(list.map((c) => texts[c.customerName]).join("\n\n────────────\n\n"), `${list.length}명 문구를 한꺼번에 복사했어요`));
-      r.querySelector("#uaReset").addEventListener("click", () => { lsSet(key, []); r.querySelector("#mOk").click(); setTimeout(openUnpaidAll, 60); });
+      r.querySelector("#uaReset").addEventListener("click", () => { lsSet(key, []); r.querySelector("#mOk").click(); setTimeout(() => openUnpaidAll(mode), 60); });
     } });
   if (!S.config.account) toast("설정에서 입금 계좌를 입력하면 문구에 계좌가 들어가요", "warn", 4000);
 }
@@ -1095,8 +1099,8 @@ function yearUnpaidText(name) {
   const total = row ? row.total : loadedSum;
   let items = list.map((o) => `· ${o.date} ${o.productNumber || "상품"}${o.size ? " / " + o.size : ""} ×${o.quantity} = ${won(amt(o))}`).join("\n");
   if (total > loadedSum) items += (items ? "\n" : "") + `· 그 이전 주문 ${won(total - loadedSum)}`;
-  const tpl = S.config.template || DEFAULT_TEMPLATE;
-  return tpl.replaceAll("{고객}", name).replaceAll("{날짜}", `20${yy}년 미입금`).replaceAll("{내역}", items).replaceAll("{금액}", won(total)).replaceAll("{계좌}", accountLine() || "(계좌는 설정에서 입력해 주세요)");
+  const tpl = S.config.templateYear || DEFAULT_YEAR_TEMPLATE;
+  return tpl.replaceAll("{고객}", name).replaceAll("{날짜}", `20${yy}년`).replaceAll("{내역}", items).replaceAll("{금액}", won(total)).replaceAll("{계좌}", accountLine() || "(계좌는 설정에서 입력해 주세요)");
 }
 
 /* ───────── excel import ───────── */
@@ -1226,7 +1230,7 @@ const HELP = [
   ] },
   { id: "after", tab: "라방 후", steps: [
     ["미입금 확인", "「⚠ 고객별 미입금」에서 고객 옆 📋를 누르면 주문 내역 + 금액 + 계좌가 담긴 문구가 복사돼요. 카톡에 붙여넣어 보내요."],
-    ["올해 누적 미입금", "「📌 고객별 누적 미입금」에는 올해 전체 기간의 미입금이 고객별로 모여 있어요. 📋로 누적 금액 안내 문구를 복사할 수 있어요."],
+    ["올해 누적 미입금", "「📌 고객별 누적 미입금」에는 올해 전체 기간의 미입금이 고객별로 모여 있어요. 📋로 한 명씩, 「○명 한 번에」로 모두에게 거파 안내 문구(앞으로 거래 제한 안내)를 복사할 수 있어요."],
     ["미입금 한 번에", "「📋 ○명 한 번에」를 누르면 미입금 고객 문구가 모두 나와요. 차례로 「복사」 → 카톡 붙여넣기 하면 보낸 고객에 ✓ 표시가 남아요."],
     ["입금 들어오면", "주문 목록에서 그 고객 「입금」 칸을 체크해요. 「고객 검색」에 이름을 쓰면 빨리 찾아요."],
     ["포장 준비", "「📦 상품/품목별 수량」에서 오늘 나간 상품 개수를 보고, 「📅 당일 고객별 구매·입금」에서 포장 끝난 고객을 체크해요. 고객마다 입금완료/남은 금액이 함께 보여요."],
@@ -1456,6 +1460,9 @@ async function openSettings() {
     ${sec("📋 미입금 안내 문구")}
     <textarea class="inp" id="sTpl" rows="7" style="width:100%">${esc(c.template || DEFAULT_TEMPLATE)}</textarea>
     <div class="muted" style="font-size:11px;margin-top:4px;line-height:1.5">바뀌는 칸: {고객} {날짜} {내역} {금액} {계좌}<br><button type="button" class="btn sm" id="sTplReset" style="margin-top:4px"><span class="always" style="display:inline">기본 문구로 되돌리기</span></button></div>
+    ${sec("📌 누적 미입금(거파) 안내 문구")}
+    <textarea class="inp" id="sTplYear" rows="7" style="width:100%">${esc(c.templateYear || DEFAULT_YEAR_TEMPLATE)}</textarea>
+    <div class="muted" style="font-size:11px;margin-top:4px;line-height:1.5">「📌 고객별 누적 미입금」의 📋·「○명 한 번에」에 쓰여요. 바뀌는 칸: {고객} {날짜} {내역} {금액} {계좌}<br><button type="button" class="btn sm" id="sTplYearReset" style="margin-top:4px"><span class="always" style="display:inline">기본 문구로 되돌리기</span></button></div>
     </div>`;
   const ok = await modal({
     title: "⚙ 업체 설정", bodyHTML: body, okText: "저장",
@@ -1463,11 +1470,12 @@ async function openSettings() {
       root.querySelector(".modal").style.maxWidth = "480px";
       root.querySelector("#sSw").addEventListener("click", (e) => { const b = e.target.closest(".sw"); if (!b) return; color = b.dataset.c; root.querySelectorAll(".sw").forEach((x) => x.classList.toggle("on", x === b)); document.documentElement.style.setProperty("--primary", COLORS[color]); });
       root.querySelector("#sTplReset").addEventListener("click", () => { $("#sTpl").value = DEFAULT_TEMPLATE; });
+      root.querySelector("#sTplYearReset").addEventListener("click", () => { $("#sTplYear").value = DEFAULT_YEAR_TEMPLATE; });
     },
     validate: () => {
       const n = (id, max = Infinity) => Math.min(max, Math.max(0, Number($(id).value) || 0));
       return { storeName: $("#sName").value.trim(), color, profitRate: n("#sRate", 100), vipLine: n("#sVip"), cardFee: n("#sCard", 20), shipFee: n("#sShip"), packFee: n("#sPack"),
-        bank: $("#sBank").value.trim(), account: $("#sAcc").value.trim(), holder: $("#sHolder").value.trim(), template: $("#sTpl").value.trim() || DEFAULT_TEMPLATE };
+        bank: $("#sBank").value.trim(), account: $("#sAcc").value.trim(), holder: $("#sHolder").value.trim(), template: $("#sTpl").value.trim() || DEFAULT_TEMPLATE, templateYear: $("#sTplYear").value.trim() || DEFAULT_YEAR_TEMPLATE };
     },
   });
   if (!ok) { applyTheme(); return; }
@@ -1591,6 +1599,8 @@ function bind() {
       copyText(lines.join("\n"), "정산서를 복사했어요. 카톡에 붙여넣기 하세요");
     } else if (act === "unpaidall") {
       openUnpaidAll();
+    } else if (act === "yearunpaidall") {
+      openUnpaidAll("year");
     } else if (act === "yearcopy") {
       copyText(yearUnpaidText(b.dataset.name), `${b.dataset.name}님 누적 미입금 문구를 복사했어요`);
       if (!S.config.account) toast("설정에서 입금 계좌를 입력하면 문구에 계좌가 들어가요", "warn", 4000);

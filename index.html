@@ -301,6 +301,7 @@ td.amt{color:var(--primary);font-weight:600}
         <label class="chk"><input type="checkbox" id="fPaid">입금</label>
         <label class="chk"><input type="checkbox" id="fCard">카드</label>
         <button class="btn primary w" id="fSubmit" type="submit" style="height:36px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span class="always" style="display:inline">추가</span></button>
+        <button class="btn w" id="fDisc" type="button" style="height:36px" title="할인·쿠폰처럼 빼는 금액 입력"><span class="always" style="display:inline">➖ 할인/쿠폰</span></button>
       </form>
       <div id="custHint" style="font-size:12.5px;margin-top:8px;min-height:18px;line-height:1.5"></div>
     </section>
@@ -374,6 +375,11 @@ const fullToShort = (s) => s ? s.slice(2) : "";
 let collator; try { collator = new Intl.Collator("ko"); } catch { collator = null; }
 const cmp = (a, b) => collator ? collator.compare(a || "", b || "") : String(a || "").localeCompare(String(b || ""));
 const amt = (o) => (Number(o.quantity) || 0) * (Number(o.unitPrice) || 0);
+// 자동 택배비 줄 / 할인·쿠폰 줄 (마이너스 금액) = "부속 줄"
+const SHIP_NAME = "🚚 택배비";
+const isAutoShip = (o) => o.productNumber === SHIP_NAME;
+const isDiscount = (o) => Number(o.unitPrice) < 0;
+const isExtra = (o) => isAutoShip(o) || isDiscount(o);
 const monthOf = (short) => { const p = String(short).split("-"); return p.length >= 2 ? `${p[0]}-${p[1]}` : ""; };
 const isCurrentMonth = (short) => { const p = String(short).split("-"); if (p.length !== 3) return false; const n = new Date(); return 2000 + Number(p[0]) === n.getFullYear() && Number(p[1]) - 1 === n.getMonth(); };
 const curMonthKey = () => { const n = new Date(); return `${n.getFullYear()}-${pad(n.getMonth() + 1)}`; };
@@ -390,7 +396,7 @@ const COLORS = { gold: "#d9a92e", pink: "#e8709a", mint: "#2fb59a", blue: "#3b82
 const INKS = { gold: "#1a1306", pink: "#2a0612", mint: "#03201a", blue: "#ffffff", green: "#ffffff", purple: "#ffffff", coral: "#2a0a04" };
 const DEFAULT_TEMPLATE = "{고객}님 안녕하세요 😊\n{날짜} 주문하신 내역이에요.\n{내역}\n\n총 {금액} 입금 부탁드려요 🙏\n{계좌}";
 const DEFAULT_YEAR_TEMPLATE = "{고객}님 안녕하세요.\n거파금액이 확인되어 앞으로 거래가 제한됨을 알려드립니다.\n\n{내역}\n\n거파금액 합계: {금액}\n{계좌}";
-const DEFAULT_CONFIG = { storeName: "", color: "gold", profitRate: 20, vipLine: 500000, vipAuto: true, vipNames: [], yearHide: {}, cardFee: 0, shipFee: 0, packFee: 0, bank: "", account: "", holder: "", template: DEFAULT_TEMPLATE, templateYear: DEFAULT_YEAR_TEMPLATE };
+const DEFAULT_CONFIG = { storeName: "", color: "gold", profitRate: 20, vipLine: 500000, vipAuto: true, vipNames: [], yearHide: {}, cardFee: 0, shipFee: 0, packFee: 0, shipAuto: false, shipCharge: 4000, shipFreeLine: 100000, bank: "", account: "", holder: "", template: DEFAULT_TEMPLATE, templateYear: DEFAULT_YEAR_TEMPLATE };
 
 /* ───────── state ───────── */
 const S = {
@@ -618,7 +624,7 @@ function derive() {
   // 순이익 추정: 원가표에 있는 상품은 (판매가-원가), 없는 상품은 비율로 계산 → 카드 수수료, 택배·포장비(고객별 하루 1건) 차감
   const paidM = monthly.filter((x) => x.isPaid || x.isCard);
   let margin = 0, costHit = 0;
-  paidM.forEach((x) => { const key = String(x.productNumber || "").trim(); if (key && key in S.costs) { margin += amt(x) - S.costs[key] * (Number(x.quantity) || 0); costHit++; } else margin += amt(x) * r / 100; });
+  paidM.forEach((x) => { const key = String(x.productNumber || "").trim(); if (isExtra(x)) { margin += amt(x); return; } if (key && key in S.costs) { margin += amt(x) - S.costs[key] * (Number(x.quantity) || 0); costHit++; } else margin += amt(x) * r / 100; });
   const cardFee = paidM.filter((x) => x.isCard).reduce((s, x) => s + amt(x), 0) * (Number(S.config.cardFee) || 0) / 100;
   const ships = new Set(paidM.map((x) => x.date + "|" + x.customerName)).size;
   const shipCost = ships * ((Number(S.config.shipFee) || 0) + (Number(S.config.packFee) || 0));
@@ -638,10 +644,10 @@ function derive() {
     dailyCust: sumBy(daily),
     buyPaid: (() => { const m = {}; scope.forEach((x) => { const r = m[x.customerName] || (m[x.customerName] = { customerName: x.customerName, total: 0, paid: 0 }); const a = amt(x); r.total += a; if (x.isPaid || x.isCard) r.paid += a; }); return Object.values(m); })(),
     paidCust: sumBy(scope.filter((x) => x.isPaid)),
-    unpaidCust: sumBy(scope.filter((x) => !x.isPaid && !x.isCard)),
+    unpaidCust: sumBy(scope.filter((x) => !x.isPaid && !x.isCard)).filter((r) => r.total > 0),
     monthlyCust: sumBy(monthly),
     grandCust: Object.entries(grand).map(([customerName, total]) => ({ customerName, total })),
-    productScope: S.showAll ? o : daily,
+    productScope: (S.showAll ? o : daily).filter((x) => !isExtra(x)),
   };
 }
 const isVipPick = (name) => !!name && (S.config.vipNames || []).includes(name);
@@ -728,7 +734,7 @@ function renderTable(D) {
       c += `<div class="ocard ${S.selected.has(o.id) ? "sel" : ""}">
         <input type="checkbox" data-act="sel" data-id="${id}" ${S.selected.has(o.id) ? "checked" : ""} style="grid-row:1/3">
         <div class="who"><button type="button" class="linkbtn" data-act="cust" data-name="${esc(o.customerName)}">${esc(o.customerName)}</button><small>${esc(o.date)}</small></div>
-        <div class="money">${won(a)}<small>${o.unitPrice ? won(o.unitPrice) : "0원"} × ${esc(o.quantity)}</small></div>
+        <div class="money" ${a < 0 ? 'style="color:var(--danger)"' : ""}>${won(a)}<small>${o.unitPrice ? won(o.unitPrice) : "0원"} × ${esc(o.quantity)}</small></div>
         <div class="what">${esc(o.productNumber || "상품 없음")}${o.size ? ` · ${esc(o.size)}` : ""}</div>
         <div class="acts">
           <label class="pill ${o.isPaid ? "on" : ""}"><input type="checkbox" data-act="paid" data-id="${id}" ${o.isPaid ? "checked" : ""}>${o.isPaid ? "✔ 입금" : "입금 전"}</label>
@@ -750,7 +756,7 @@ function renderTable(D) {
       h += `<tr>${chk}${f("date", "text", "width:84px")}${f("customerName")}${f("productNumber")}${f("size", "text", "width:70px")}${f("quantity", "number", "width:64px;text-align:right")}${f("unitPrice", "number", "width:90px;text-align:right")}<td class="r amt">${won((Number(e.quantity) || 0) * (Number(e.unitPrice) || 0))}</td>${pay}<td class="c"><button class="ib" data-act="save" data-id="${id}" title="저장" style="color:var(--success)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 5 5L20 7"/></svg></button><button class="ib" data-act="cancel" title="취소" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`;
     } else {
       const a = amt(o);
-      h += `<tr>${chk}<td>${esc(o.date)}</td><td style="font-weight:600"><button type="button" class="linkbtn" data-act="cust" data-name="${esc(o.customerName)}">${esc(o.customerName)}</button></td><td>${esc(o.productNumber)}</td><td>${esc(o.size)}</td><td class="r">${esc(o.quantity)}</td><td class="r">${o.unitPrice ? won(o.unitPrice) : ""}</td><td class="r amt">${a ? won(a) : ""}</td>${pay}<td class="c"><button class="ib w" data-act="edit" data-id="${id}" title="수정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></td></tr>`;
+      h += `<tr>${chk}<td>${esc(o.date)}</td><td style="font-weight:600"><button type="button" class="linkbtn" data-act="cust" data-name="${esc(o.customerName)}">${esc(o.customerName)}</button></td><td>${esc(o.productNumber)}</td><td>${esc(o.size)}</td><td class="r">${esc(o.quantity)}</td><td class="r">${o.unitPrice ? won(o.unitPrice) : ""}</td><td class="r amt" ${a < 0 ? 'style="color:var(--danger)"' : ""}>${a ? won(a) : ""}</td>${pay}<td class="c"><button class="ib w" data-act="edit" data-id="${id}" title="수정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></td></tr>`;
     }
   }
   wrap.innerHTML = h + "</tbody></table>";
@@ -800,7 +806,7 @@ function panelBuyPaid(D) {
 }
 function yearHideMap() { const yy = String(S.dateFilter || toShort(new Date())).slice(0, 2); return ((S.config.yearHide || {})[yy]) || {}; }
 // 목록에서 삭제한 고객은 숨겨요. 삭제한 뒤 미입금이 더 늘면(새 주문) 다시 보여요.
-function yearUnpaidRows() { const hid = yearHideMap(); return yearUnpaidRowsAll().filter((r) => !(r.customerName in hid) || r.total > Number(hid[r.customerName])); }
+function yearUnpaidRows() { const hid = yearHideMap(); return yearUnpaidRowsAll().filter((r) => r.total > 0).filter((r) => !(r.customerName in hid) || r.total > Number(hid[r.customerName])); }
 function yearUnpaidRowsAll() {
   const yy = String(S.dateFilter || toShort(new Date())).slice(0, 2);
   if (S.yearUnpaid && S.yearUnpaid.yy === yy) return S.yearUnpaid.rows;
@@ -839,7 +845,7 @@ function renderProducts(D) {
 }
 function renderCosts(D) {
   const names = Object.keys(S.costs).sort(cmp);
-  const monthProducts = [...new Set(D.monthly.map((o) => String(o.productNumber || "").trim()).filter(Boolean))].sort(cmp);
+  const monthProducts = [...new Set(D.monthly.filter((o) => !isExtra(o)).map((o) => String(o.productNumber || "").trim()).filter(Boolean))].sort(cmp);
   const missing = monthProducts.filter((p) => !(p in S.costs));
   $("#costMissing").innerHTML = missing.length
     ? `<div class="muted" style="font-size:12px;margin-top:10px">이번 달 원가 미등록 상품 ${missing.length}개 (눌러서 입력):</div><div class="row" style="gap:6px;margin-top:6px">${missing.slice(0, 30).map((p) => `<button class="btn sm" data-act="costpick" data-name="${esc(p)}"><span class="always" style="display:inline">${esc(p)}</span></button>`).join("")}${missing.length > 30 ? `<span class="muted" style="font-size:12px">외 ${missing.length - 30}개</span>` : ""}</div>`
@@ -1175,7 +1181,7 @@ async function importOrders(file, preRows) {
     if (!date) { if (/^(정산|총합계|입금액|미입금액|합계)/.test(String(rawDate).trim()) || /^[\d,.\s-]+$/.test(name)) return; bad.push(i + 2); return; }
     const ca = Date.parse(String(pick(r, "created_at")).replace(" ", "T"));
     parsed.push({ date, customerName: name, productNumber: String(pick(r, "상품/품목", "상품", "품목", "상품번호", "product_number")).trim(), size: String(pick(r, "사이즈", "옵션", "size")).trim(),
-      quantity: Math.max(1, Number(pick(r, "수량", "quantity")) || 1), unitPrice: Math.max(0, Number(String(pick(r, "단가", "가격", "unit_price")).replace(/[^\d.-]/g, "")) || 0), _ca: isNaN(ca) ? 0 : ca,
+      quantity: Math.max(1, Number(pick(r, "수량", "quantity")) || 1), unitPrice: Number(String(pick(r, "단가", "가격", "unit_price")).replace(/[^\d.-]/g, "")) || 0, _ca: isNaN(ca) ? 0 : ca,
       isPaid: yes(pick(r, "입금여부", "입금", "is_paid")) || yes(pick(r, "카드", "is_card")), isCard: yes(pick(r, "카드", "is_card")) });
   });
   if (!parsed.length) { toast("불러올 주문을 찾지 못했어요. '고객명'과 '날짜' 칸이 있는 엑셀인지 확인해 주세요", "err", 5000); return; }
@@ -1274,7 +1280,7 @@ const HELP = [
   ] },
   { id: "month", tab: "월말", steps: [
     ["매출 확인", "「월 판매총액」「월 순매출」「월 순이익(추정)」과 아래 매출 그래프로 한 달을 확인해요. 순이익 카드에 마우스를 올리면 계산 방법이 나와요."],
-    ["고객 등급", "「👥 고객별 총 누적 합계」에서 💎VIP 고객을 확인해요. 기준 금액은 ⚙ 설정에서 바꿔요. 등급 옆 체크칸(또는 고객 정보 창)을 체크하면 금액과 상관없이 VIP가 돼요."], ["누적 미입금 선택 삭제", "「📌 고객별 누적 미입금」에서 고객을 체크하고 「🗑 선택 삭제」를 누르면 목록에서 빠져요(주문은 그대로). 「↩ 삭제한 고객」에서 되돌릴 수 있어요."],
+    ["고객 등급", "「👥 고객별 총 누적 합계」에서 💎VIP 고객을 확인해요. 기준 금액은 ⚙ 설정에서 바꿔요. 등급 옆 체크칸(또는 고객 정보 창)을 체크하면 금액과 상관없이 VIP가 돼요."], ["할인·쿠폰", "주문 입력칸 옆 「➖ 할인/쿠폰」을 누르고 고객·금액을 넣으면 마이너스 줄이 생겨요. 합계·미입금 안내에서 자동으로 빠져요."], ["고객 택배비", "⚙ 설정 → 「🚚 고객 택배비 자동 추가」를 켜면 같은 날 상품 합계가 기준 이하인 고객에게 「🚚 택배비」 줄이 자동으로 붙어요. 택배비 줄을 지우면 그날은 빠져요. 택배비·할인 줄 입금 체크는 상품이 모두 입금되면 같이 바뀌어요."], ["누적 미입금 선택 삭제", "「📌 고객별 누적 미입금」에서 고객을 체크하고 「🗑 선택 삭제」를 누르면 목록에서 빠져요(주문은 그대로). 「↩ 삭제한 고객」에서 되돌릴 수 있어요."],
     ["월초기화", "새 달이 시작되면 「💾 백업 → 전체 백업」을 받은 뒤 「월초기화」를 눌러요. 지난달 주문은 지워지지만 매출 그래프와 고객 누적 합계는 남아요. 이때 ♻ 휴지통도 함께 비워져요."],
     ["비용 점검", "⚙ 설정의 순이익 비율, 카드 수수료, 택배비, 포장비가 실제와 맞는지 한 번씩 확인해요."],
   ] },
@@ -1358,6 +1364,7 @@ async function addOrder() {
   $("#fSubmit").disabled = true;
   try {
     await api.addOrder(o);
+    syncExtras([[o.date, o.customerName]]);
     $("#fName").value = ""; $("#fProd").value = ""; $("#fSize").value = ""; $("#fQty").value = 1; $("#fPrice").value = ""; $("#fPaid").checked = false; $("#fCard").checked = false; renderCustHint();
     S.dateFilter = o.date; S.showAll = false; S.search = ""; $("#search").value = "";
     render();
@@ -1366,7 +1373,61 @@ async function addOrder() {
 }
 async function updateOrder(id, u) {
   if (u.isCard === true) u.isPaid = true;
-  try { await api.updateOrder(id, u); } catch (e) { console.error(e); toast(errMsg(e), "err"); render(); }
+  const before = S.orders.find((x) => x.id === id); const old = before ? [before.date, before.customerName] : null; const wasExtra = before && isExtra(before);
+  try { await api.updateOrder(id, u); } catch (e) { console.error(e); toast(errMsg(e), "err"); render(); return; }
+  const now = S.orders.find((x) => x.id === id);
+  if (!wasExtra && now && !isExtra(now)) syncExtras([old, [now.date, now.customerName]].filter(Boolean));
+}
+/* ───────── 자동 택배비 · 할인 줄 맞추기 ───────── */
+// 같은 날 같은 고객: 상품 합계가 기준 이하이면 「🚚 택배비」 줄을 1개 자동으로 두고, 넘으면 지워요.
+// 택배비·할인 줄의 입금 체크는 그 고객 상품 줄이 모두 입금되면 같이 입금으로 바뀌어요.
+async function syncExtras(pairs, { skipShip = false } = {}) {
+  if (!S.canWrite) return;
+  const seen = new Set();
+  for (const pr of pairs) {
+    if (!pr) continue; const k = pr[0] + "|" + pr[1]; if (seen.has(k)) continue; seen.add(k);
+    try { await syncOne(pr[0], pr[1], skipShip); } catch (e) { console.error(e); toast(errMsg(e), "err"); }
+  }
+}
+async function syncOne(date, name, skipShip) {
+  const mine = () => S.orders.filter((o) => o.date === date && o.customerName === name);
+  const items = mine().filter((o) => !isExtra(o));
+  const goods = items.reduce((s, o) => s + amt(o), 0);
+  const allPaid = items.length > 0 && items.every((o) => o.isPaid || o.isCard);
+  const c = S.config, fee = Number(c.shipCharge) || 0;
+  if (!skipShip) {
+    const ships = mine().filter(isAutoShip);
+    const need = !!c.shipAuto && fee > 0 && items.length > 0 && goods > 0 && goods <= (Number(c.shipFreeLine) || 0);
+    if (need && !ships.length) await api.addOrder({ date, customerName: name, productNumber: SHIP_NAME, size: "", quantity: 1, unitPrice: fee, isPaid: allPaid, isCard: false, createdAt: Date.now() });
+    else if (need && ships.length > 1) await api.deleteOrders(ships.slice(1).map((o) => o.id));
+    else if (!need && ships.length && c.shipAuto) await api.deleteOrders(ships.map((o) => o.id));
+  }
+  if (!items.length) return;
+  for (const x of mine().filter(isExtra)) if (!x.isCard && !!x.isPaid !== allPaid) await api.updateOrder(x.id, { isPaid: allPaid });
+}
+async function openDiscount() {
+  if (!S.canWrite) return;
+  const date = fullToShort(S.formDate);
+  const body = `<p class="muted" style="font-size:12px;margin:0 0 10px">${esc(date)} 주문에 빼는 금액을 한 줄로 넣어요. 금액은 그냥 숫자로 쓰면 자동으로 마이너스가 돼요.</p>
+    <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>고객명</label><input class="inp" id="dName" list="custList" value="${esc($("#fName").value.trim())}" placeholder="고객명"></div>
+      <div class="field" style="flex:1;min-width:110px"><label>종류</label><select class="inp" id="dKind">${["할인", "쿠폰", "적립금", "택배비 면제", "기타"].map((k) => `<option>${k}</option>`).join("")}</select></div></div>
+    <div class="row" style="gap:10px;margin-top:8px"><div class="field" style="flex:1;min-width:120px"><label>빼는 금액 (원)</label><input class="inp" id="dAmt" type="number" min="1" step="100" inputmode="numeric" placeholder="예: 3000"></div>
+      <div class="field" style="flex:1;min-width:120px"><label>메모 (선택)</label><input class="inp" id="dMemo" maxlength="30" placeholder="예: 첫구매 쿠폰"></div></div>`;
+  const res = await modal({ title: "➖ 할인/쿠폰 넣기", bodyHTML: body, okText: "빼기",
+    onMount: (r) => { setTimeout(() => { const n = r.querySelector("#dName"); (n.value ? r.querySelector("#dAmt") : n).focus(); }, 30); },
+    validate: () => {
+      const name = $("#dName").value.trim(), a = Math.abs(Math.round(Number($("#dAmt").value) || 0));
+      if (!name) { toast("고객명을 입력해 주세요", "warn"); return false; }
+      if (!a) { toast("빼는 금액을 입력해 주세요", "warn"); return false; }
+      return { name, a, kind: $("#dKind").value, memo: $("#dMemo").value.trim() };
+    } });
+  if (!res) return;
+  const items = S.orders.filter((o) => o.date === date && o.customerName === res.name && !isExtra(o));
+  try {
+    await api.addOrder({ date, customerName: res.name, productNumber: "➖ " + res.kind, size: res.memo, quantity: 1, unitPrice: -res.a, isPaid: items.length > 0 && items.every((o) => o.isPaid || o.isCard), isCard: false, createdAt: Date.now() });
+    S.dateFilter = date; S.showAll = false; render();
+    toast(`${res.name}님 ${res.kind} ${won(res.a)}을 뺐어요`);
+  } catch (e) { console.error(e); toast(errMsg(e), "err"); }
 }
 async function archiveCustomerTotals(list) {
   const m = {}; list.forEach((o) => { m[o.customerName] = (m[o.customerName] || 0) + amt(o); });
@@ -1389,7 +1450,7 @@ async function deleteSelected() {
   const list = S.orders.filter((o) => S.selected.has(o.id));
   if (!list.length) return;
   if (!(await modal({ title: `${list.length}건을 삭제할까요?`, message: `삭제한 주문은 휴지통에 ${TRASH_DAYS}일 동안 보관돼요.\n휴지통에서 언제든 되돌릴 수 있어요.`, okText: "휴지통으로", danger: true }))) return;
-  try { await api.trashOrders(list, list.length > 8 ? "휴지통으로 옮기는 중" : null); S.selected.clear(); toast(`${list.length}건을 휴지통으로 옮겼어요 (되돌리기 가능)`); }
+  try { await api.trashOrders(list, list.length > 8 ? "휴지통으로 옮기는 중" : null); S.selected.clear(); toast(`${list.length}건을 휴지통으로 옮겼어요 (되돌리기 가능)`); syncExtras(list.map((o) => [o.date, o.customerName]), { skipShip: list.some(isAutoShip) }); }
   catch (e) { console.error(e); toast(errMsg(e), "err"); }
   finally { busy(null); api.flush(); }
 }
@@ -1455,21 +1516,21 @@ async function openEditModal(id) {
   const f = (k, label, v, t = "text", extra = "") => `<div class="field" style="flex:1;min-width:120px"><label>${label}</label><input class="inp" id="e_${k}" type="${t}" value="${esc(v)}" ${extra}></div>`;
   const body = `<div class="row" style="gap:10px">${f("date", "날짜 (26-11-19)", o.date)}${f("customerName", "고객명", o.customerName)}</div>
     <div class="row" style="gap:10px;margin-top:8px">${f("productNumber", "상품/품목", o.productNumber)}${f("size", "사이즈", o.size || "")}</div>
-    <div class="row" style="gap:10px;margin-top:8px">${f("quantity", "수량", o.quantity, "number", 'min="1" inputmode="numeric"')}${f("unitPrice", "단가", o.unitPrice, "number", 'min="0" inputmode="numeric"')}</div>
+    <div class="row" style="gap:10px;margin-top:8px">${f("quantity", "수량", o.quantity, "number", 'min="1" inputmode="numeric"')}${f("unitPrice", "단가 (할인은 마이너스)", o.unitPrice, "number", 'inputmode="numeric"')}</div>
     <div class="row" style="margin-top:12px;justify-content:space-between"><button type="button" class="btn danger sm" id="e_del"><span class="always" style="display:inline">🗑 이 주문 삭제</span></button></div>`;
   let del = false;
   const res = await modal({ title: "✏ 주문 수정", bodyHTML: body, okText: "저장",
     onMount: (r) => r.querySelector("#e_del").addEventListener("click", () => { del = true; r.querySelector("#mOk").click(); }),
     validate: () => {
       if (del) return { del: true };
-      const u = { date: $("#e_date").value.trim(), customerName: $("#e_customerName").value.trim() || "(미입력)", productNumber: $("#e_productNumber").value.trim(), size: $("#e_size").value.trim(), quantity: Math.max(1, Number($("#e_quantity").value) || 1), unitPrice: Math.max(0, Number($("#e_unitPrice").value) || 0) };
+      const u = { date: $("#e_date").value.trim(), customerName: $("#e_customerName").value.trim() || "(미입력)", productNumber: $("#e_productNumber").value.trim(), size: $("#e_size").value.trim(), quantity: Math.max(1, Number($("#e_quantity").value) || 1), unitPrice: Number($("#e_unitPrice").value) || 0 };
       if (!/^\d{2}-\d{2}-\d{2}$/.test(u.date)) { toast("날짜는 26-11-19 형식으로 입력해 주세요", "warn"); return false; }
       return u;
     } });
   if (!res) return;
   if (res.del) {
     if (!(await modal({ title: "이 주문을 삭제할까요?", message: `${o.customerName} · ${o.productNumber || ""} ${won(amt(o))}\n휴지통에 ${TRASH_DAYS}일 동안 보관돼서 되돌릴 수 있어요.`, okText: "휴지통으로", danger: true }))) return;
-    try { await api.trashOrders([o]); toast("휴지통으로 옮겼어요 (되돌리기 가능)"); } catch (e) { toast(errMsg(e), "err"); }
+    try { await api.trashOrders([o]); toast("휴지통으로 옮겼어요 (되돌리기 가능)"); syncExtras([[o.date, o.customerName]], { skipShip: isAutoShip(o) }); } catch (e) { toast(errMsg(e), "err"); }
     return;
   }
   await updateOrder(o.id, res);
@@ -1485,8 +1546,12 @@ async function openSettings() {
     <div class="field"><label>브랜드 색</label><div class="swatches" id="sSw">${Object.entries(COLORS).map(([k, v]) => `<button type="button" class="sw ${k === color ? "on" : ""}" data-c="${k}" style="background:${v}" title="${k}"></button>`).join("")}</div></div>
     ${sec("💰 순이익 계산")}
     <div class="row" style="gap:10px;align-items:flex-end">${num("sRate", "순이익 비율 (%)<br><span style='font-size:10px'>원가표에 없는 상품에 적용</span>", c.profitRate, 'max="100"')}${num("sCard", "카드 수수료 (%)", c.cardFee, 'step="0.1" max="20"')}</div>
-    <div class="row" style="gap:10px;margin-top:8px">${num("sShip", "택배비 (원/건)", c.shipFee, 'step="100"')}${num("sPack", "포장비 (원/건)", c.packFee, 'step="100"')}</div>
+    <div class="row" style="gap:10px;margin-top:8px">${num("sShip", "택배비 원가 (원/건)<br><span style='font-size:10px'>내가 택배사에 내는 비용</span>", c.shipFee, 'step="100"')}${num("sPack", "포장비 (원/건)", c.packFee, 'step="100"')}</div>
     <div class="muted" style="font-size:11px;margin-top:6px">택배·포장은 같은 날 같은 고객 주문을 1건으로 계산해요.</div>
+    ${sec("🚚 고객 택배비 자동 추가")}
+    <label class="row" style="gap:6px;font-size:13px;margin-bottom:6px"><input type="checkbox" id="sShipAuto" ${c.shipAuto ? "checked" : ""}> 자동 추가 켜기 (ON)</label>
+    <div class="row" style="gap:10px">${num("sShipCharge", "고객 택배비 (원)", c.shipCharge, 'step="500"')}${num("sShipLine", "이 금액 이하면 붙여요 (원)", c.shipFreeLine, 'step="10000"')}</div>
+    <div class="muted" style="font-size:11px;margin-top:6px">같은 날 같은 고객의 상품 합계(할인 전)가 기준 이하이면 주문표에 「🚚 택배비」 줄이 자동으로 생기고, 넘으면 없어져요. 켜면 오늘 주문에도 바로 적용돼요.</div>
     ${sec("💎 VIP")}
     <label class="row" style="gap:6px;font-size:13px;margin-bottom:6px"><input type="checkbox" id="sVipAuto" ${c.vipAuto !== false ? "checked" : ""}> 금액 기준으로 자동 VIP</label>
     <div class="row">${num("sVip", "VIP 기준 금액 (원)", c.vipLine, 'step="10000"')}</div>
@@ -1511,12 +1576,19 @@ async function openSettings() {
     },
     validate: () => {
       const n = (id, max = Infinity) => Math.min(max, Math.max(0, Number($(id).value) || 0));
-      return { storeName: $("#sName").value.trim(), color, profitRate: n("#sRate", 100), vipLine: n("#sVip"), vipAuto: $("#sVipAuto").checked, cardFee: n("#sCard", 20), shipFee: n("#sShip"), packFee: n("#sPack"),
+      return { storeName: $("#sName").value.trim(), color, profitRate: n("#sRate", 100), vipLine: n("#sVip"), vipAuto: $("#sVipAuto").checked, cardFee: n("#sCard", 20), shipFee: n("#sShip"), packFee: n("#sPack"), shipAuto: $("#sShipAuto").checked, shipCharge: n("#sShipCharge"), shipFreeLine: n("#sShipLine"),
         bank: $("#sBank").value.trim(), account: $("#sAcc").value.trim(), holder: $("#sHolder").value.trim(), template: $("#sTpl").value.trim() || DEFAULT_TEMPLATE, templateYear: $("#sTplYear").value.trim() || DEFAULT_YEAR_TEMPLATE };
     },
   });
   if (!ok) { applyTheme(); return; }
-  try { const merged = { ...S.config, ...ok }; await api.setConfig(merged); S.config = { ...DEFAULT_CONFIG, ...merged }; render(); toast("설정을 저장했어요"); }
+  try {
+    const prevShip = [S.config.shipAuto, S.config.shipCharge, S.config.shipFreeLine].join("|");
+    const merged = { ...S.config, ...ok }; await api.setConfig(merged); S.config = { ...DEFAULT_CONFIG, ...merged }; render(); toast("설정을 저장했어요");
+    if (merged.shipAuto && prevShip !== [merged.shipAuto, merged.shipCharge, merged.shipFreeLine].join("|")) {
+      const today = toShort(new Date()); const pairs = [...new Set(S.orders.filter((o) => o.date === today).map((o) => o.date + "\u0001" + o.customerName))].map((k) => k.split("\u0001"));
+      if (pairs.length) { busy("오늘 주문에 택배비 적용 중"); try { await syncExtras(pairs); } finally { busy(null); } toast(`오늘 고객 ${pairs.length}명에게 택배비 기준을 적용했어요`); }
+    }
+  }
   catch (e) { console.error(e); applyTheme(); toast(errMsg(e), "err"); }
 }
 
@@ -1547,6 +1619,7 @@ function bind() {
   $("#search").addEventListener("input", (e) => { S.search = e.target.value.trim(); render(); });
   $("#bClearSearch").addEventListener("click", () => { S.search = ""; $("#search").value = ""; render(); });
   $("#bDelSel").addEventListener("click", deleteSelected);
+  $("#fDisc").addEventListener("click", openDiscount);
   $("#bAllPaid").addEventListener("click", markAllPaid);
   $("#bDelAll").addEventListener("click", deleteAll);
   $("#bReset").addEventListener("click", resetAll);
@@ -1595,7 +1668,7 @@ function bind() {
   tw.addEventListener("input", (e) => { const k = e.target.dataset.edit; if (!k) return; S.editData[k] = e.target.value; const tr = e.target.closest("tr"); const a = tr && tr.querySelector(".amt"); if (a) a.textContent = won((Number(S.editData.quantity) || 0) * (Number(S.editData.unitPrice) || 0)); });
   const saveEdit = async () => {
     const id = S.editingId, e = S.editData; if (!id) return;
-    const u = { date: String(e.date).trim(), customerName: String(e.customerName).trim() || "(미입력)", productNumber: String(e.productNumber).trim(), size: String(e.size).trim(), quantity: Math.max(1, Number(e.quantity) || 1), unitPrice: Math.max(0, Number(e.unitPrice) || 0) };
+    const u = { date: String(e.date).trim(), customerName: String(e.customerName).trim() || "(미입력)", productNumber: String(e.productNumber).trim(), size: String(e.size).trim(), quantity: Math.max(1, Number(e.quantity) || 1), unitPrice: Number(e.unitPrice) || 0 };
     if (!/^\d{2}-\d{2}-\d{2}$/.test(u.date)) { toast("날짜는 26-11-19 형식으로 입력해 주세요", "warn"); return; }
     S.editingId = null; S.editData = {}; document.activeElement && document.activeElement.blur(); render();
     await updateOrder(id, u);

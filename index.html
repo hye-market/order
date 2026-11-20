@@ -146,6 +146,8 @@ td.amt{color:var(--primary);font-weight:600}
 
 /* panels */
 .g3{display:grid;grid-template-columns:1fr;gap:12px}
+.stack{display:flex;flex-direction:column;gap:12px;min-width:0}
+@media(min-width:768px){.stack{gap:18px}}
 .g2{display:grid;grid-template-columns:1fr;gap:12px}
 @media(min-width:768px){.g3{grid-template-columns:repeat(3,1fr);gap:18px}.g2{grid-template-columns:repeat(2,1fr);gap:18px}}
 .list{display:flex;flex-direction:column;gap:6px;margin-top:12px}
@@ -335,7 +337,7 @@ td.amt{color:var(--primary);font-weight:600}
 
   <section class="card pad" id="statement"></section>
 
-  <div class="g3" id="panels3"></div>
+  <div class="g2" id="panels3"></div>
   <div class="g2" id="panels2"></div>
   <section class="card pad" id="productPanel"></section>
   <section class="card pad" id="costPanel">
@@ -457,7 +459,7 @@ const loaders = {
       catch (e) { console.warn("order_totals_before 없음", e); }
     }
     S.olderTotals = older; S.olderCount = olderCount;
-    loadUsage();
+    loadUsage(); loadYearUnpaid();
   },
   customer_totals: async () => { S.custArchive = (await selectAll("customer_totals")).map((r) => ({ customerName: r.customer_name, total: Number(r.total) || 0 })); },
   sales_archive: async () => { S.salesRaw = (await selectAll("sales_archive")).map((r) => ({ monthKey: r.month_key, day: Number(r.day), total: Number(r.total) || 0 })); },
@@ -632,6 +634,7 @@ function derive() {
     daily, monthly, sorted, rate, profitInfo,
     metrics: { dTotal, dPaid, dUnpaid: dTotal - dPaid, mTotal, mPaid, mProfit },
     dailyCust: sumBy(daily),
+    buyPaid: (() => { const m = {}; scope.forEach((x) => { const r = m[x.customerName] || (m[x.customerName] = { customerName: x.customerName, total: 0, paid: 0 }); const a = amt(x); r.total += a; if (x.isPaid || x.isCard) r.paid += a; }); return Object.values(m); })(),
     paidCust: sumBy(scope.filter((x) => x.isPaid)),
     unpaidCust: sumBy(scope.filter((x) => !x.isPaid && !x.isCard)),
     monthlyCust: sumBy(monthly),
@@ -748,7 +751,7 @@ function renderTable(D) {
   }
   wrap.innerHTML = h + "</tbody></table>";
 }
-function panel(key, title, data, { grade = false, check = false, excel = null, copy = false } = {}) {
+function panel(key, title, data, { grade = false, check = false, excel = null, copy = false, copyYear = false } = {}) {
   const sorted = [...data].sort((a, b) => (b.total || 0) - (a.total || 0));
   const exp = !!S.expanded[key]; const vis = exp ? sorted : sorted.slice(0, 10);
   const checked = check ? new Set(lsGet("lo-check-" + key + "-" + S.dateFilter, [])) : null;
@@ -758,7 +761,7 @@ function panel(key, title, data, { grade = false, check = false, excel = null, c
     h += `<div class="list">`;
     vis.forEach((d, i) => {
       const on = checked && checked.has(d.customerName);
-      h += `<div class="item ${on ? "checked" : ""}"><div class="l">${check ? `<input type="checkbox" data-act="pcheck" data-key="${key}" data-name="${esc(d.customerName)}" ${on ? "checked" : ""}>` : ""}<span class="n">${i + 1}</span><span class="nm"><button type="button" class="linkbtn" data-act="cust" data-name="${esc(d.customerName)}">${esc(d.customerName)}</button></span>${grade ? `<span class="grade">${vip(d.total)}</span>` : ""}</div><span class="row" style="gap:4px;flex-wrap:nowrap"><span class="v">${won(d.total)}</span>${copy ? `<button class="ib" data-act="unpaidcopy" data-name="${esc(d.customerName)}" title="입금 안내 문구 복사" style="color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></button>` : ""}</span></div>`;
+      h += `<div class="item ${on ? "checked" : ""}"><div class="l">${check ? `<input type="checkbox" data-act="pcheck" data-key="${key}" data-name="${esc(d.customerName)}" ${on ? "checked" : ""}>` : ""}<span class="n">${i + 1}</span><span class="nm"><button type="button" class="linkbtn" data-act="cust" data-name="${esc(d.customerName)}">${esc(d.customerName)}</button></span>${grade ? `<span class="grade">${vip(d.total)}</span>` : ""}</div><span class="row" style="gap:4px;flex-wrap:nowrap"><span class="v">${won(d.total)}</span>${copyYear ? `<button class="ib" data-act="yearcopy" data-name="${esc(d.customerName)}" title="누적 미입금 안내 문구 복사" style="color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></button>` : ""}${copy ? `<button class="ib" data-act="unpaidcopy" data-name="${esc(d.customerName)}" title="입금 안내 문구 복사" style="color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></button>` : ""}</span></div>`;
     });
     h += `</div>`;
     if (sorted.length > 10) h += `<button class="more" data-act="more" data-key="${key}">${exp ? "▲ 접기" : `▼ 더보기 (${sorted.length - 10}명)`}</button>`;
@@ -767,8 +770,48 @@ function panel(key, title, data, { grade = false, check = false, excel = null, c
   return h + `</section>`;
 }
 const PANEL_DATA = {};
+function panelBuyPaid(D) {
+  const key = "daily";
+  const sorted = [...D.buyPaid].sort((a, b) => b.total - a.total || cmp(a.customerName, b.customerName));
+  const exp = !!S.expanded[key]; const vis = exp ? sorted : sorted.slice(0, 10);
+  const checked = new Set(lsGet("lo-check-" + key + "-" + S.dateFilter, []));
+  const tot = sorted.reduce((s, r) => s + r.total, 0), paid = sorted.reduce((s, r) => s + r.paid, 0);
+  let h = `<section class="card pad"><div class="row between"><h2 class="ttl">📅 ${S.showAll ? "전체" : "당일"} 고객별 구매·입금</h2>${sorted.length ? `<span class="muted" style="font-size:12px">구매 <b class="c-primary">${won(tot)}</b> · 입금 <b class="c-success">${won(paid)}</b></span>` : ""}</div>`;
+  if (!sorted.length) return h + `<p class="muted" style="text-align:center;padding:14px 0;margin:0">데이터 없음</p></section>`;
+  h += `<div class="list">`;
+  vis.forEach((d, i) => {
+    const on = checked.has(d.customerName); const left = d.total - d.paid;
+    const st = left <= 0 ? `<span class="c-success" style="font-size:11.5px">✔ 입금완료</span>` : d.paid > 0 ? `<span style="font-size:11.5px">입금 <b class="c-success">${won(d.paid)}</b> · 남음 <b class="c-danger">${won(left)}</b></span>` : `<span class="c-danger" style="font-size:11.5px">미입금</span>`;
+    h += `<div class="item ${on ? "checked" : ""}"><div class="l"><input type="checkbox" data-act="pcheck" data-key="${key}" data-name="${esc(d.customerName)}" ${on ? "checked" : ""} title="포장 완료 표시"><span class="n">${i + 1}</span><span class="nm"><button type="button" class="linkbtn" data-act="cust" data-name="${esc(d.customerName)}">${esc(d.customerName)}</button></span></div>
+      <span style="text-align:right;line-height:1.3"><span class="v">${won(d.total)}</span><br>${st}</span></div>`;
+  });
+  h += `</div>`;
+  if (sorted.length > 10) h += `<button class="more" data-act="more" data-key="${key}">${exp ? "▲ 접기" : `▼ 더보기 (${sorted.length - 10}명)`}</button>`;
+  return h + `</section>`;
+}
+function yearUnpaidRows() {
+  const yy = String(S.dateFilter || toShort(new Date())).slice(0, 2);
+  if (S.yearUnpaid && S.yearUnpaid.yy === yy) return S.yearUnpaid.rows;
+  // 서버 합계가 아직 없으면 불러온 주문으로 계산
+  const m = {}; S.orders.filter((o) => String(o.date).startsWith(yy + "-") && !o.isPaid && !o.isCard).forEach((o) => { m[o.customerName] = (m[o.customerName] || 0) + amt(o); });
+  return Object.entries(m).map(([customerName, total]) => ({ customerName, total }));
+}
+async function loadYearUnpaid() {
+  if (!sb || !SHOP) return;
+  const yy = String(S.dateFilter || toShort(new Date())).slice(0, 2);
+  try {
+    const rows = await q(sb.rpc("unpaid_totals_year", { yy }));
+    S.yearUnpaid = { yy, rows: (rows || []).map((r) => ({ customerName: r.customer_name, total: Number(r.total) || 0, cnt: Number(r.cnt) || 0 })) };
+    render();
+  } catch (e) { console.warn("unpaid_totals_year 없음", e); }
+}
 function renderPanels(D) {
-  $("#panels3").innerHTML = panel("daily", "📅 당일 고객별 구매", D.dailyCust, { check: true }) + panel("paid", "💰 고객별 입금", D.paidCust) + panel("unpaid", "⚠ 고객별 미입금 <span class='muted' style='font-size:11px;font-weight:400'>📋 = 입금 안내 복사</span>", D.unpaidCust, { copy: true });
+  const yy = String(S.dateFilter || toShort(new Date())).slice(0, 2);
+  if (S.yearUnpaid && S.yearUnpaid.yy !== yy && !S.yearUnpaidLoading) { S.yearUnpaidLoading = true; loadYearUnpaid().finally(() => { S.yearUnpaidLoading = false; }); }
+  $("#panels3").innerHTML = panelBuyPaid(D) + `<div class="stack">`
+    + panel("unpaid", `⚠ ${S.showAll ? "전체" : "당일"} 고객별 미입금 <span class='muted' style='font-size:11px;font-weight:400'>📋 = 입금 안내 복사</span>`, D.unpaidCust, { copy: true })
+    + panel("yearunpaid", `📌 고객별 누적 미입금 <span class='muted' style='font-size:11px;font-weight:400'>20${yy}년 전체</span>`, yearUnpaidRows(), { excel: `누적_미입금_20${yy}년`, copyYear: true })
+    + `</div>`;
   $("#panels2").innerHTML = panel("monthly", "📆 월 누적 합계", D.monthlyCust, { grade: true, excel: "월_누적_합계" }) + panel("grand", "👥 고객별 총 누적 합계", D.grandCust, { grade: true, excel: "고객별_총_누적_합계" });
 }
 function renderProducts(D) {
@@ -1044,6 +1087,18 @@ async function openCustomer(name) {
   } catch (e) { console.error(e); toast(errMsg(e), "err"); }
 }
 
+function yearUnpaidText(name) {
+  const yy = String(S.dateFilter || toShort(new Date())).slice(0, 2);
+  const row = yearUnpaidRows().find((r) => r.customerName === name);
+  const list = S.orders.filter((o) => o.customerName === name && String(o.date).startsWith(yy + "-") && !o.isPaid && !o.isCard).sort((a, b) => cmp(a.date, b.date));
+  const loadedSum = list.reduce((s, o) => s + amt(o), 0);
+  const total = row ? row.total : loadedSum;
+  let items = list.map((o) => `· ${o.date} ${o.productNumber || "상품"}${o.size ? " / " + o.size : ""} ×${o.quantity} = ${won(amt(o))}`).join("\n");
+  if (total > loadedSum) items += (items ? "\n" : "") + `· 그 이전 주문 ${won(total - loadedSum)}`;
+  const tpl = S.config.template || DEFAULT_TEMPLATE;
+  return tpl.replaceAll("{고객}", name).replaceAll("{날짜}", `20${yy}년 미입금`).replaceAll("{내역}", items).replaceAll("{금액}", won(total)).replaceAll("{계좌}", accountLine() || "(계좌는 설정에서 입력해 주세요)");
+}
+
 /* ───────── excel import ───────── */
 function readSheetRows(file) {
   return new Promise((resolve, reject) => {
@@ -1171,9 +1226,10 @@ const HELP = [
   ] },
   { id: "after", tab: "라방 후", steps: [
     ["미입금 확인", "「⚠ 고객별 미입금」에서 고객 옆 📋를 누르면 주문 내역 + 금액 + 계좌가 담긴 문구가 복사돼요. 카톡에 붙여넣어 보내요."],
+    ["올해 누적 미입금", "「📌 고객별 누적 미입금」에는 올해 전체 기간의 미입금이 고객별로 모여 있어요. 📋로 누적 금액 안내 문구를 복사할 수 있어요."],
     ["미입금 한 번에", "「📋 ○명 한 번에」를 누르면 미입금 고객 문구가 모두 나와요. 차례로 「복사」 → 카톡 붙여넣기 하면 보낸 고객에 ✓ 표시가 남아요."],
     ["입금 들어오면", "주문 목록에서 그 고객 「입금」 칸을 체크해요. 「고객 검색」에 이름을 쓰면 빨리 찾아요."],
-    ["포장 준비", "「📦 상품/품목별 수량」에서 오늘 나간 상품 개수를 보고, 「📅 당일 고객별 구매」에서 포장 끝난 고객을 체크해요."],
+    ["포장 준비", "「📦 상품/품목별 수량」에서 오늘 나간 상품 개수를 보고, 「📅 당일 고객별 구매·입금」에서 포장 끝난 고객을 체크해요. 고객마다 입금완료/남은 금액이 함께 보여요."],
     ["정산서 보내기", "「📄 고객 정산서」에서 고객을 골라 「카톡용 복사」나 「엑셀」로 보내요."],
     ["백업", "위쪽 「💾 백업 → 오늘 백업」으로 하루 한 번 받아 두면 안심이에요. 주문·고객별·상품별이 한 파일에 들어가요. (폰은 ⋯ 더보기 안에 있어요)"],
   ] },
@@ -1535,6 +1591,9 @@ function bind() {
       copyText(lines.join("\n"), "정산서를 복사했어요. 카톡에 붙여넣기 하세요");
     } else if (act === "unpaidall") {
       openUnpaidAll();
+    } else if (act === "yearcopy") {
+      copyText(yearUnpaidText(b.dataset.name), `${b.dataset.name}님 누적 미입금 문구를 복사했어요`);
+      if (!S.config.account) toast("설정에서 입금 계좌를 입력하면 문구에 계좌가 들어가요", "warn", 4000);
     } else if (act === "unpaidcopy") {
       copyText(unpaidText(b.dataset.name), `${b.dataset.name}님 입금 안내 문구를 복사했어요`);
       if (!S.config.account) toast("설정에서 입금 계좌를 입력하면 문구에 계좌가 들어가요", "warn", 4000);

@@ -160,6 +160,7 @@ td.amt{color:var(--primary);font-weight:600}
 .more{width:100%;margin-top:6px;height:30px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:12px;border-radius:8px}
 .more:hover{background:var(--card2)}
 .grade{font-size:11.5px}
+.vipck{display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap}.vipck input{width:13px;height:13px;margin:0}
 
 /* chart */
 .chart svg{width:100%;height:auto;display:block;margin-top:10px}
@@ -389,11 +390,11 @@ const COLORS = { gold: "#d9a92e", pink: "#e8709a", mint: "#2fb59a", blue: "#3b82
 const INKS = { gold: "#1a1306", pink: "#2a0612", mint: "#03201a", blue: "#ffffff", green: "#ffffff", purple: "#ffffff", coral: "#2a0a04" };
 const DEFAULT_TEMPLATE = "{고객}님 안녕하세요 😊\n{날짜} 주문하신 내역이에요.\n{내역}\n\n총 {금액} 입금 부탁드려요 🙏\n{계좌}";
 const DEFAULT_YEAR_TEMPLATE = "{고객}님 안녕하세요.\n거파금액이 확인되어 앞으로 거래가 제한됨을 알려드립니다.\n\n{내역}\n\n거파금액 합계: {금액}\n{계좌}";
-const DEFAULT_CONFIG = { storeName: "", color: "gold", profitRate: 20, vipLine: 500000, cardFee: 0, shipFee: 0, packFee: 0, bank: "", account: "", holder: "", template: DEFAULT_TEMPLATE, templateYear: DEFAULT_YEAR_TEMPLATE };
+const DEFAULT_CONFIG = { storeName: "", color: "gold", profitRate: 20, vipLine: 500000, vipAuto: true, vipNames: [], yearHide: {}, cardFee: 0, shipFee: 0, packFee: 0, bank: "", account: "", holder: "", template: DEFAULT_TEMPLATE, templateYear: DEFAULT_YEAR_TEMPLATE };
 
 /* ───────── state ───────── */
 const S = {
-  orders: [], custArchive: [], salesRaw: [], memos: {}, costs: {}, trash: [], customers: {}, isOwner: false, role: "", loginId: "", config: { ...DEFAULT_CONFIG }, configLoaded: false,
+  orders: [], custArchive: [], salesRaw: [], memos: {}, costs: {}, trash: [], customers: {}, yearSel: new Set(), isOwner: false, role: "", loginId: "", config: { ...DEFAULT_CONFIG }, configLoaded: false,
   dateFilter: toShort(new Date()), formDate: toFull(new Date()), calMonth: null,
   showAll: false, search: "", selected: new Set(), editingId: null, editData: {},
   expanded: {}, mode: "loading", firstLoadDone: false, canWrite: true, statementCustomer: "",
@@ -643,7 +644,9 @@ function derive() {
     productScope: S.showAll ? o : daily,
   };
 }
-const vip = (t) => (Number(t) >= Number(S.config.vipLine || 500000) ? "💎 VIP" : "🟢 일반");
+const isVipPick = (name) => !!name && (S.config.vipNames || []).includes(name);
+const vip = (t, name) => (isVipPick(name) ? "💎 VIP" : (S.config.vipAuto !== false && Number(t) >= Number(S.config.vipLine || 500000)) ? "💎 VIP" : "🟢 일반");
+async function patchConfig(p) { const prev = S.config; const c = { ...S.config, ...p }; S.config = { ...DEFAULT_CONFIG, ...c }; render(); try { await api.setConfig(c); } catch (e) { console.error(e); S.config = prev; render(); toast(errMsg(e), "err"); } }
 
 /* ───────── render ───────── */
 function applyTheme() {
@@ -762,10 +765,15 @@ function panel(key, title, data, { grade = false, check = false, excel = null, c
     h += `<div class="list">`;
     vis.forEach((d, i) => {
       const on = checked && checked.has(d.customerName);
-      h += `<div class="item ${on ? "checked" : ""}"><div class="l">${check ? `<input type="checkbox" data-act="pcheck" data-key="${key}" data-name="${esc(d.customerName)}" ${on ? "checked" : ""}>` : ""}<span class="n">${i + 1}</span><span class="nm"><button type="button" class="linkbtn" data-act="cust" data-name="${esc(d.customerName)}">${esc(d.customerName)}</button></span>${grade ? `<span class="grade">${vip(d.total)}</span>` : ""}</div><span class="row" style="gap:4px;flex-wrap:nowrap"><span class="v">${won(d.total)}</span>${copyYear ? `<button class="ib" data-act="yearcopy" data-name="${esc(d.customerName)}" title="누적 미입금 안내 문구 복사" style="color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></button>` : ""}${copy ? `<button class="ib" data-act="unpaidcopy" data-name="${esc(d.customerName)}" title="입금 안내 문구 복사" style="color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></button>` : ""}</span></div>`;
+      const ysel = copyYear && S.yearSel.has(d.customerName);
+      h += `<div class="item ${on || ysel ? "checked" : ""}"><div class="l">${check ? `<input type="checkbox" data-act="pcheck" data-key="${key}" data-name="${esc(d.customerName)}" ${on ? "checked" : ""}>` : ""}${copyYear ? `<input type="checkbox" data-act="ysel" data-name="${esc(d.customerName)}" ${ysel ? "checked" : ""} title="선택 (목록에서 삭제할 고객)">` : ""}<span class="n">${i + 1}</span><span class="nm"><button type="button" class="linkbtn" data-act="cust" data-name="${esc(d.customerName)}">${esc(d.customerName)}</button></span>${grade ? `<label class="grade vipck" title="체크하면 금액과 상관없이 VIP"><input type="checkbox" data-act="vipck" data-name="${esc(d.customerName)}" ${isVipPick(d.customerName) ? "checked" : ""}>${vip(d.total, d.customerName)}</label>` : ""}</div><span class="row" style="gap:4px;flex-wrap:nowrap"><span class="v">${won(d.total)}</span>${copyYear ? `<button class="ib" data-act="yearcopy" data-name="${esc(d.customerName)}" title="누적 미입금 안내 문구 복사" style="color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></button>` : ""}${copy ? `<button class="ib" data-act="unpaidcopy" data-name="${esc(d.customerName)}" title="입금 안내 문구 복사" style="color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></button>` : ""}</span></div>`;
     });
     h += `</div>`;
     if (sorted.length > 10) h += `<button class="more" data-act="more" data-key="${key}">${exp ? "▲ 접기" : `▼ 더보기 (${sorted.length - 10}명)`}</button>`;
+  }
+  if (copyYear) {
+    const nSel = [...S.yearSel].filter((n) => sorted.some((d) => d.customerName === n)).length; const nHid = Object.keys(yearHideMap()).length;
+    if (sorted.length || nHid) h += `<div class="row between" style="margin-top:8px;gap:6px">${sorted.length ? `<button class="btn sm" data-act="yselall"><span class="always" style="display:inline">${nSel && nSel === sorted.length ? "☐ 선택 해제" : "☑ 전체 선택"}</span></button>` : "<span></span>"}<span class="row" style="gap:6px">${nHid ? `<button class="btn sm" data-act="yhidden"><span class="always" style="display:inline">↩ 삭제한 고객 ${nHid}명</span></button>` : ""}${nSel ? `<button class="btn sm danger" data-act="ydel"><span class="always" style="display:inline">🗑 선택 삭제 (${nSel}명)</span></button>` : ""}</span></div>`;
   }
   PANEL_DATA[key] = { sorted, excel };
   return h + `</section>`;
@@ -790,7 +798,10 @@ function panelBuyPaid(D) {
   if (sorted.length > 10) h += `<button class="more" data-act="more" data-key="${key}">${exp ? "▲ 접기" : `▼ 더보기 (${sorted.length - 10}명)`}</button>`;
   return h + `</section>`;
 }
-function yearUnpaidRows() {
+function yearHideMap() { const yy = String(S.dateFilter || toShort(new Date())).slice(0, 2); return ((S.config.yearHide || {})[yy]) || {}; }
+// 목록에서 삭제한 고객은 숨겨요. 삭제한 뒤 미입금이 더 늘면(새 주문) 다시 보여요.
+function yearUnpaidRows() { const hid = yearHideMap(); return yearUnpaidRowsAll().filter((r) => !(r.customerName in hid) || r.total > Number(hid[r.customerName])); }
+function yearUnpaidRowsAll() {
   const yy = String(S.dateFilter || toShort(new Date())).slice(0, 2);
   if (S.yearUnpaid && S.yearUnpaid.yy === yy) return S.yearUnpaid.rows;
   // 서버 합계가 아직 없으면 불러온 주문으로 계산
@@ -1019,7 +1030,7 @@ async function backupAll() {
   const all = [...S.orders].sort((a, b) => cmp(a.date, b.date) || cmp(a.customerName, b.customerName));
   const wb = ordersWorkbook(all, "전체주문");
   const D = derive();
-  XLSX.utils.book_append_sheet(wb, sheetWithTotal([...D.grandCust].sort((a, b) => b.total - a.total).map((c, i) => ({ 순번: i + 1, 고객명: c.customerName, 합계: c.total, 등급: vip(c.total).replace(/^\S+\s/, "") })), "고객명", ["합계"]), "고객별총누적");
+  XLSX.utils.book_append_sheet(wb, sheetWithTotal([...D.grandCust].sort((a, b) => b.total - a.total).map((c, i) => ({ 순번: i + 1, 고객명: c.customerName, 합계: c.total, 등급: vip(c.total, c.customerName).replace(/^\S+\s/, "") })), "고객명", ["합계"]), "고객별총누적");
   XLSX.utils.book_append_sheet(wb, sheetWithTotal(Object.keys(S.costs).sort(cmp).map((p) => ({ "상품/품목": p, 원가: S.costs[p] })), "상품/품목", []), "상품원가표");
   XLSX.utils.book_append_sheet(wb, sheetWithTotal(Object.keys(S.customers).sort(cmp).map((n) => ({ 고객명: n, 연락처: S.customers[n].phone, 주소: S.customers[n].address, 메모: S.customers[n].memo })), "고객명", []), "고객정보");
   XLSX.utils.book_append_sheet(wb, sheetWithTotal([...S.salesRaw].sort((a, b) => cmp(a.monthKey, b.monthKey) || a.day - b.day).map((r) => ({ 월: r.monthKey, 일: r.day, 매출: r.total })), "월", ["매출"]), "매출표");
@@ -1053,7 +1064,7 @@ function renderCustHint() {
   const info = S.customers[name]; const known = info || S.orders.some((o) => o.customerName === name) || S.custArchive.some((c) => c.customerName === name);
   if (!known) { el.innerHTML = `<span class="muted">🆕 새 고객</span>`; return; }
   const st = custStats(name);
-  const bits = [`<b>${esc(name)}</b> ${vip(st.grand)}`];
+  const bits = [`<b>${esc(name)}</b> ${vip(st.grand, name)}`];
   if (st.unpaid) bits.push(`<span class="c-danger">미입금 ${won(st.unpaid)}</span>`);
   if (info && info.memo) bits.push(`📝 ${esc(info.memo)}`);
   if (info && info.phone) bits.push(`📞 ${esc(info.phone)}`);
@@ -1070,9 +1081,10 @@ async function openCustomer(name) {
   const st = custStats(name);
   const recent = [...st.mine].sort((a, b) => cmp(b.date, a.date) || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 8);
   const body = `<div class="metrics" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
-      <div class="metric"><div class="lab">총 누적</div><div class="val c-primary" style="font-size:15px">${won(st.grand)}</div><div class="sub">${vip(st.grand)}</div></div>
+      <div class="metric"><div class="lab">총 누적</div><div class="val c-primary" style="font-size:15px">${won(st.grand)}</div><div class="sub">${vip(st.grand, name)}</div></div>
       <div class="metric"><div class="lab">이번 달</div><div class="val c-success" style="font-size:15px">${won(st.monthTotal)}</div></div>
       <div class="metric"><div class="lab">미입금</div><div class="val c-danger" style="font-size:15px">${won(st.unpaid)}</div></div></div>
+    <label class="row" style="gap:6px;font-size:13px;margin-bottom:8px"><input type="checkbox" id="cuVip" ${isVipPick(name) ? "checked" : ""}> 💎 VIP로 지정 <span class="muted" style="font-size:11px">(금액과 상관없이)</span></label>
     <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:140px"><label>연락처</label><input class="inp" id="cuPhone" value="${esc(info.phone)}" inputmode="tel" placeholder="010-0000-0000"></div></div>
     <div class="field" style="margin-top:8px"><label>주소</label><input class="inp" id="cuAddr" value="${esc(info.address)}" placeholder="배송 주소"></div>
     <div class="field" style="margin-top:8px"><label>메모 (주문 입력할 때 이름 아래에 보여요)</label><textarea class="inp" id="cuMemo" rows="3" style="width:100%" placeholder="예) 66사이즈, 단골, 합배송 원함">${esc(info.memo)}</textarea></div>
@@ -1082,15 +1094,38 @@ async function openCustomer(name) {
   let del = false;
   const res = await modal({ title: `👤 ${name}`, bodyHTML: body, okText: "저장",
     onMount: (r) => { r.querySelector(".modal").style.maxWidth = "520px"; const d = r.querySelector("#cuDel"); if (d) d.addEventListener("click", () => { if (confirmInline(d, "한 번 더 누르면 지워져요")) { del = true; r.querySelector("#mOk").click(); } }); },
-    validate: () => (del ? { del: true } : { phone: $("#cuPhone").value.trim(), address: $("#cuAddr").value.trim(), memo: $("#cuMemo").value.trim() }) });
+    validate: () => (del ? { del: true } : { phone: $("#cuPhone").value.trim(), address: $("#cuAddr").value.trim(), memo: $("#cuMemo").value.trim(), vip: $("#cuVip").checked }) });
   if (!res) return;
   try {
     if (res.del) { await api.deleteCustomer(name); toast("고객 정보를 지웠어요 (주문은 그대로예요)"); }
-    else { await api.setCustomer(name, res); toast(`${name}님 정보를 저장했어요`); }
+    else {
+      const { vip: vipOn, ...info } = res;
+      if (vipOn !== isVipPick(name)) await setVipPick(name, vipOn);
+      const old = S.customers[name] || { phone: "", address: "", memo: "" };
+      if (S.customers[name] || info.phone || info.address || info.memo) { if (info.phone !== old.phone || info.address !== old.address || info.memo !== old.memo || !S.customers[name]) await api.setCustomer(name, info); }
+      toast(`${name}님 정보를 저장했어요`);
+    }
     renderCustHint();
   } catch (e) { console.error(e); toast(errMsg(e), "err"); }
 }
 
+async function setVipPick(name, on) {
+  const set = new Set(S.config.vipNames || []); on ? set.add(name) : set.delete(name);
+  await patchConfig({ vipNames: [...set].sort(cmp) });
+}
+async function openYearHidden() {
+  const yy = String(S.dateFilter || toShort(new Date())).slice(0, 2); const hid = yearHideMap();
+  const all = Object.fromEntries(yearUnpaidRowsAll().map((r) => [r.customerName, r.total]));
+  const names = Object.keys(hid).sort(cmp);
+  if (!names.length) return;
+  const body = `<p class="muted" style="font-size:12px;margin:0 0 8px">목록에서만 삭제한 고객이에요. 주문과 입금 기록은 그대로 있어요.<br>되돌릴 고객을 체크하고 「되돌리기」를 누르세요. (삭제 후 미입금이 더 생기면 자동으로 다시 보여요)</p>
+    <div class="list" style="max-height:50vh;overflow:auto">${names.map((n) => `<label class="item" style="cursor:pointer"><div class="l"><input type="checkbox" class="yhck" value="${esc(n)}"><span class="nm">${esc(n)}</span></div><span class="v">${all[n] != null ? won(all[n]) : "입금 완료"}</span></label>`).join("")}</div>`;
+  const res = await modal({ title: `↩ 누적 미입금에서 삭제한 고객 (20${yy}년)`, bodyHTML: body, okText: "되돌리기",
+    validate: () => { const v = [...document.querySelectorAll(".yhck:checked")].map((x) => x.value); if (!v.length) { toast("되돌릴 고객을 체크해 주세요", "warn"); return false; } return v; } });
+  if (!res) return;
+  const hide = { ...(S.config.yearHide || {}) }; const m = { ...(hide[yy] || {}) }; res.forEach((n) => delete m[n]); hide[yy] = m;
+  await patchConfig({ yearHide: hide }); toast(`${res.length}명을 목록에 되돌렸어요`);
+}
 function yearUnpaidText(name) {
   const yy = String(S.dateFilter || toShort(new Date())).slice(0, 2);
   const row = yearUnpaidRows().find((r) => r.customerName === name);
@@ -1239,7 +1274,7 @@ const HELP = [
   ] },
   { id: "month", tab: "월말", steps: [
     ["매출 확인", "「월 판매총액」「월 순매출」「월 순이익(추정)」과 아래 매출 그래프로 한 달을 확인해요. 순이익 카드에 마우스를 올리면 계산 방법이 나와요."],
-    ["고객 등급", "「👥 고객별 총 누적 합계」에서 💎VIP 고객을 확인해요. 기준 금액은 ⚙ 설정에서 바꿔요."],
+    ["고객 등급", "「👥 고객별 총 누적 합계」에서 💎VIP 고객을 확인해요. 기준 금액은 ⚙ 설정에서 바꿔요. 등급 옆 체크칸(또는 고객 정보 창)을 체크하면 금액과 상관없이 VIP가 돼요."], ["누적 미입금 선택 삭제", "「📌 고객별 누적 미입금」에서 고객을 체크하고 「🗑 선택 삭제」를 누르면 목록에서 빠져요(주문은 그대로). 「↩ 삭제한 고객」에서 되돌릴 수 있어요."],
     ["월초기화", "새 달이 시작되면 「💾 백업 → 전체 백업」을 받은 뒤 「월초기화」를 눌러요. 지난달 주문은 지워지지만 매출 그래프와 고객 누적 합계는 남아요. 이때 ♻ 휴지통도 함께 비워져요."],
     ["비용 점검", "⚙ 설정의 순이익 비율, 카드 수수료, 택배비, 포장비가 실제와 맞는지 한 번씩 확인해요."],
   ] },
@@ -1453,7 +1488,9 @@ async function openSettings() {
     <div class="row" style="gap:10px;margin-top:8px">${num("sShip", "택배비 (원/건)", c.shipFee, 'step="100"')}${num("sPack", "포장비 (원/건)", c.packFee, 'step="100"')}</div>
     <div class="muted" style="font-size:11px;margin-top:6px">택배·포장은 같은 날 같은 고객 주문을 1건으로 계산해요.</div>
     ${sec("💎 VIP")}
+    <label class="row" style="gap:6px;font-size:13px;margin-bottom:6px"><input type="checkbox" id="sVipAuto" ${c.vipAuto !== false ? "checked" : ""}> 금액 기준으로 자동 VIP</label>
     <div class="row">${num("sVip", "VIP 기준 금액 (원)", c.vipLine, 'step="10000"')}</div>
+    <div class="muted" style="font-size:11px;margin-top:6px">금액과 상관없이 VIP로 정하려면 「월 누적·고객별 총 누적」 목록의 등급 옆 체크칸이나 고객 정보 창에서 체크하세요. 지금 체크된 고객: ${(c.vipNames || []).length}명</div>
     ${sec("🏦 입금 계좌 (미입금 안내·정산서 문구에 들어가요)")}
     <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:90px"><label>은행</label><input class="inp" id="sBank" maxlength="20" value="${esc(c.bank)}" placeholder="예: 카카오뱅크"></div><div class="field" style="flex:1;min-width:90px"><label>예금주</label><input class="inp" id="sHolder" maxlength="20" value="${esc(c.holder)}"></div></div>
     <div class="field" style="margin-top:8px"><label>계좌번호</label><input class="inp" id="sAcc" maxlength="40" value="${esc(c.account)}" inputmode="numeric"></div>
@@ -1474,12 +1511,12 @@ async function openSettings() {
     },
     validate: () => {
       const n = (id, max = Infinity) => Math.min(max, Math.max(0, Number($(id).value) || 0));
-      return { storeName: $("#sName").value.trim(), color, profitRate: n("#sRate", 100), vipLine: n("#sVip"), cardFee: n("#sCard", 20), shipFee: n("#sShip"), packFee: n("#sPack"),
+      return { storeName: $("#sName").value.trim(), color, profitRate: n("#sRate", 100), vipLine: n("#sVip"), vipAuto: $("#sVipAuto").checked, cardFee: n("#sCard", 20), shipFee: n("#sShip"), packFee: n("#sPack"),
         bank: $("#sBank").value.trim(), account: $("#sAcc").value.trim(), holder: $("#sHolder").value.trim(), template: $("#sTpl").value.trim() || DEFAULT_TEMPLATE, templateYear: $("#sTplYear").value.trim() || DEFAULT_YEAR_TEMPLATE };
     },
   });
   if (!ok) { applyTheme(); return; }
-  try { await api.setConfig(ok); S.config = { ...DEFAULT_CONFIG, ...ok }; render(); toast("설정을 저장했어요"); }
+  try { const merged = { ...S.config, ...ok }; await api.setConfig(merged); S.config = { ...DEFAULT_CONFIG, ...merged }; render(); toast("설정을 저장했어요"); }
   catch (e) { console.error(e); applyTheme(); toast(errMsg(e), "err"); }
 }
 
@@ -1581,7 +1618,7 @@ function bind() {
     if (act === "more") { S.expanded[key] = !S.expanded[key]; render(); }
     else if (act === "pexcel") {
       const p = PANEL_DATA[key]; if (!p || !p.sorted.length) return;
-      const rows = p.sorted.map((d, i) => ({ 순번: i + 1, 고객명: d.customerName, 합계: d.total, 등급: vip(d.total).replace(/^\S+\s/, "") }));
+      const rows = p.sorted.map((d, i) => ({ 순번: i + 1, 고객명: d.customerName, 합계: d.total, 등급: vip(d.total, d.customerName).replace(/^\S+\s/, "") }));
       const ws = XLSX.utils.json_to_sheet(rows); XLSX.utils.sheet_add_aoa(ws, [[""], ["총합계", "", p.sorted.reduce((s, d) => s + d.total, 0)]], { origin: `A${rows.length + 2}` });
       const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "고객별합계"); saveWorkbook(wb, `${fileTag()}_${p.excel}.xlsx`);
     } else if (act === "prodexcel") {
@@ -1599,6 +1636,20 @@ function bind() {
       copyText(lines.join("\n"), "정산서를 복사했어요. 카톡에 붙여넣기 하세요");
     } else if (act === "unpaidall") {
       openUnpaidAll();
+    } else if (act === "yselall") {
+      const names = yearUnpaidRows().map((r) => r.customerName); const all = names.length && names.every((n) => S.yearSel.has(n));
+      S.yearSel = all ? new Set() : new Set(names); render();
+    } else if (act === "ydel") {
+      const names = yearUnpaidRows().filter((r) => S.yearSel.has(r.customerName));
+      if (!names.length) return;
+      if (!confirmInline(b, `한 번 더 누르면 ${names.length}명 삭제`)) return;
+      const yy = String(S.dateFilter || toShort(new Date())).slice(0, 2);
+      const hide = { ...(S.config.yearHide || {}) }; const m = { ...(hide[yy] || {}) };
+      names.forEach((r) => { m[r.customerName] = r.total; }); hide[yy] = m;
+      S.yearSel = new Set(); patchConfig({ yearHide: hide });
+      toast(`${names.length}명을 누적 미입금 목록에서 삭제했어요 (주문은 그대로예요)`);
+    } else if (act === "yhidden") {
+      openYearHidden();
     } else if (act === "yearunpaidall") {
       openUnpaidAll("year");
     } else if (act === "yearcopy") {
@@ -1619,6 +1670,8 @@ function bind() {
   document.addEventListener("change", (e) => {
     const t = e.target;
     if (t.id === "stSel") { S.statementCustomer = t.value; t.blur(); render(); }
+    if (t.dataset && t.dataset.act === "ysel") { t.checked ? S.yearSel.add(t.dataset.name) : S.yearSel.delete(t.dataset.name); render(); return; }
+    if (t.dataset && t.dataset.act === "vipck") { setVipPick(t.dataset.name, t.checked).then(() => toast(t.checked ? `${t.dataset.name}님을 VIP로 지정했어요` : `${t.dataset.name}님 VIP 지정을 풀었어요`)); return; }
     if (t.dataset && t.dataset.act === "pcheck") { const k = "lo-check-" + t.dataset.key + "-" + S.dateFilter; const set = new Set(lsGet(k, [])); t.checked ? set.add(t.dataset.name) : set.delete(t.dataset.name); lsSet(k, [...set]); render(); }
   });
 }

@@ -225,6 +225,69 @@ td.amt{color:var(--primary);font-weight:600}
 .pill.card.on{background:color-mix(in srgb,var(--primary) 18%,transparent);border-color:var(--primary);color:var(--primary)}
 .pill input{display:none}
 .ro #formCard input,.ro #tableWrap input,.ro button.w{pointer-events:none;opacity:.5}
+
+/* ───────── 📦 택배 센터 ───────── */
+#pcRoot{position:fixed;inset:0;z-index:80;background:var(--bg);display:flex;flex-direction:column;--pcb:#0b4ea2;--pco:#ef7d00}
+#pcRoot.hide{display:none}
+.pc-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 14px;background:var(--pcb);color:#fff}
+.pc-bar b{font-size:16px}.pc-bar .muted{color:rgba(255,255,255,.75);font-size:12px}
+.pc-bar .btn{color:#fff;border-color:rgba(255,255,255,.35)}
+.pc-tabs{display:none}
+.pc-grid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.85fr) minmax(340px,1fr);gap:0}
+.pc-col{overflow-y:auto;padding:12px 14px 40px;border-right:1px solid var(--border);min-width:0}
+.pc-col:last-child{border-right:0}
+.pc-side-tabs{display:flex;gap:4px;margin-bottom:10px}
+.pc-side-tabs button,.pc-tabs button{flex:1;height:38px;border-radius:9px;border:1px solid var(--border);background:var(--card2);cursor:pointer;font-size:13px}
+.pc-side-tabs button.on,.pc-tabs button.on{background:var(--pcb);color:#fff;border-color:var(--pcb);font-weight:700}
+#pcRoot:not([data-view=input]) #pcInput{display:none}
+#pcRoot[data-view=input] #pcCard{display:none}
+.pc-days{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.pc-days button{height:36px;padding:0 11px;border-radius:9px;border:1px solid var(--border);background:var(--card2);cursor:pointer;font-size:13px;white-space:nowrap}
+.pc-days button.on{background:var(--pcb);border-color:var(--pcb);color:#fff;font-weight:700}
+.pc-days small{opacity:.75;font-size:11px}
+.pc-sum{font-size:13px;color:var(--muted);margin:2px 0 8px}.pc-acc{color:var(--pco)}
+.pc-wide{width:100%;height:auto!important;min-height:40px;padding:8px 12px!important;white-space:normal!important;margin-bottom:8px}
+.btn.pc-orange{background:var(--pco);border-color:var(--pco);color:#fff;font-weight:700}
+.btn.pc-blue{background:var(--pcb);border-color:var(--pcb);color:#fff;font-weight:700}
+.btn.done{background:#2b3446!important;border-color:#2b3446!important;color:#fff!important}
+.pc-o{border:1px solid var(--border);border-radius:12px;padding:9px 11px;margin-bottom:8px;background:var(--card)}
+.pc-o.ok{border-color:color-mix(in srgb,var(--success) 55%,transparent)}.pc-o.need{border-color:var(--pco);background:color-mix(in srgb,var(--pco) 9%,var(--card))}.pc-o.done{opacity:.55}
+.pc-oh{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pc-it{font-size:12.5px;color:var(--muted);margin:3px 0 7px;word-break:keep-all}
+.pc-oa{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:13px}.pc-oa span{flex:1;min-width:140px}
+.pc-oa .inp{flex:1;min-width:150px}
+.pc-done{border:1px solid var(--success);border-radius:12px;padding:10px;margin-bottom:8px;color:var(--success);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pc-tag{font-size:10.5px;padding:1px 6px;border-radius:6px;font-weight:700;background:var(--card2);white-space:nowrap}
+.pc-tag.reg{background:#ffe9a8;color:#8a5a00}.pc-tag.keep{background:#dcf6f0;color:#127a66}.pc-tag.ok{background:#e3f5e8;color:#1d7a3a}.pc-tag.warn{background:#fdeaea;color:#c0362c}
+.pc-lh{font-weight:700;font-size:13.5px;margin:14px 0 6px;display:flex;gap:8px;align-items:baseline}
+.pc-row{display:flex;align-items:center;border-bottom:1px solid var(--border)}
+.pc-row.sel{background:color-mix(in srgb,var(--pcb) 14%,transparent);box-shadow:inset 3px 0 var(--pcb)}
+.pc-pick{flex:1;text-align:left;background:none;border:0;padding:8px 6px;cursor:pointer;min-height:44px;min-width:0}
+.pc-pick small{color:var(--muted)}.pc-sub{display:block;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-x{background:none;border:0;cursor:pointer;width:38px;height:38px;color:var(--muted)}
+.pc-empty{color:var(--muted);font-size:12.5px;text-align:center;padding:14px 6px;line-height:1.6}
+.pc-card{border:2px solid var(--pcb);border-radius:14px;overflow:hidden;background:var(--card)}
+.pc-ctop{background:var(--pcb);color:#fff;padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}.pc-ctop b{font-size:18px}.pc-ctop small{opacity:.8}
+.pc-acts{margin-left:auto;display:flex;gap:4px}.pc-acts button{background:rgba(255,255,255,.16);border:0;color:#fff;border-radius:7px;height:30px;padding:0 9px;cursor:pointer;font-size:12.5px}.pc-acts button.on{background:#fff;color:var(--pcb);font-weight:700}
+.pc-lines{display:grid;grid-template-columns:5.2em minmax(0,1fr)}.pc-lines div{padding:8px 12px;border-bottom:1px solid var(--border)}.pc-lines div:nth-child(odd){color:var(--muted);font-size:12.5px;border-right:1px solid var(--border)}.pc-lines .big{font-weight:700;font-size:16px}
+.pc-warns{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px 0}.pc-w{font-size:12px;font-weight:700;padding:3px 9px;border-radius:99px;background:#fdeaea;color:#c0362c}.pc-w.info{background:color-mix(in srgb,var(--pcb) 15%,var(--card));color:var(--pcb)}
+.pc-copy{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 12px}.pc-copy .btn{height:50px;font-size:15px}
+.pc-hint{font-size:12px;color:var(--muted);padding:0 12px 8px}.pc-hint kbd{border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:11px;margin:0 1px}
+.pc-ship{display:flex;gap:6px;padding:0 12px 10px;flex-wrap:wrap}.pc-ship .inp{flex:1 1 150px}
+.pc-card>.pc-wide{margin:0 12px 10px;width:calc(100% - 24px)}
+.pc-hist{font-size:12px;color:var(--muted);padding:0 12px 10px 28px;margin:0}
+.pc-pend{border:2px solid var(--pco);background:color-mix(in srgb,var(--pco) 10%,var(--card));border-radius:12px;padding:8px 10px;font-size:13px;margin-bottom:8px}
+.pc-parsed{border:2px dashed var(--pcb);border-radius:12px;padding:10px;margin-top:10px}
+.pc-kv{display:grid;grid-template-columns:4em minmax(0,1fr);gap:2px 8px;font-size:13px;margin:6px 0 8px}.pc-kv span:nth-child(odd){color:var(--muted)}
+#pcKakao{width:100%;font-size:15px}
+@media(max-width:900px){
+  .pc-tabs{display:flex;gap:4px;padding:8px 10px;background:var(--card);border-bottom:1px solid var(--border)}
+  .pc-side-tabs{display:none}
+  .pc-grid{display:block;overflow-y:auto}
+  .pc-col{display:none;border:0;overflow:visible}
+  #pcRoot[data-view=orders] #pcOrders,#pcRoot[data-view=list] #pcList,#pcRoot[data-view=card] .pc-side,#pcRoot[data-view=input] .pc-side{display:block}
+  .pc-bar .btn{height:30px;font-size:12px;padding:0 8px}
+}
 </style>
 </head>
 <body class="notranslate" translate="no">
@@ -258,6 +321,7 @@ td.amt{color:var(--primary);font-weight:600}
       <button class="btn w desk-only" id="bSales" title="매출초기화"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="lbl">매출초기화</span></button>
       <button class="btn w desk-only" id="bReset" title="초기화"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg><span class="lbl">초기화</span></button>
       <button class="btn mob-only" id="bMore" title="더보기"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+      <button class="btn hide" id="bParcel" title="택배 센터" style="border-color:#0b4ea2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg><span class="lbl always" style="display:inline">택배</span></button>
       <button class="btn" id="bTheme" title="밝게/어둡게"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg></button>
       <button class="btn desk-only" id="bLogout" title="로그아웃"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="lbl">로그아웃</span></button>
       <button class="btn" id="bSettings" title="업체 설정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="lbl">설정</span></button>
@@ -1068,13 +1132,13 @@ function renderCustHint() {
   const el = $("#custHint"); const name = $("#fName").value.trim();
   if (!name) { el.innerHTML = ""; return; }
   const info = S.customers[name]; const known = info || S.orders.some((o) => o.customerName === name) || S.custArchive.some((c) => c.customerName === name);
-  if (!known) { el.innerHTML = `<span class="muted">🆕 새 고객</span>`; return; }
+  if (!known) { el.innerHTML = `<span class="muted">🆕 새 고객</span>` + PCL.hint(name); return; }
   const st = custStats(name);
   const bits = [`<b>${esc(name)}</b> ${vip(st.grand, name)}`];
   if (st.unpaid) bits.push(`<span class="c-danger">미입금 ${won(st.unpaid)}</span>`);
   if (info && info.memo) bits.push(`📝 ${esc(info.memo)}`);
   if (info && info.phone) bits.push(`📞 ${esc(info.phone)}`);
-  el.innerHTML = bits.join(" · ") + ` <button type="button" class="linkbtn" data-act="cust" data-name="${esc(name)}">자세히</button>`;
+  el.innerHTML = bits.join(" · ") + ` <button type="button" class="linkbtn" data-act="cust" data-name="${esc(name)}">자세히</button>` + PCL.hint(name);
 }
 function refreshCustList() {
   const names = new Set([...S.orders.map((o) => o.customerName), ...Object.keys(S.customers), ...S.custArchive.map((c) => c.customerName)]);
@@ -1654,6 +1718,7 @@ function bind() {
   });
   $("#cProd").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); $("#cCost").focus(); } });
   $("#bSetupGo").addEventListener("click", openSettings);
+  $("#bParcel").addEventListener("click", () => PCL.open());
   $("#bTheme").addEventListener("click", () => { const light = !document.body.classList.contains("light"); document.body.classList.toggle("light", light); lsSet("lo-theme", light ? "light" : "dark"); });
   $("#bExcel").addEventListener("click", () => { const D = derive(); saveWorkbook(ordersWorkbook(D.sorted), `${fileTag()}_DATA_${S.showAll ? "전체" : S.dateFilter}.xlsx`); });
 
@@ -1758,6 +1823,380 @@ function afterFirstOrders() {
     S.dateFilter = latest; S.formDate = shortToFull(latest) || S.formDate;
   }
 }
+/* ═════════════════════ 📦 택배 센터 (parcel_customers) ═════════════════════
+   혜마켓오더 주문 → 주소록 자동 연결 → LOIS 받는분·주소 복사 → 송장 일괄입력 → 발송 안내
+   같은 로그인·같은 수파베이스를 써요. 다른 표는 건드리지 않아요. */
+const PCL = (() => {
+const LABELS=[
+ ['zip',['우편번호','우편','zip','zipcode','postal']],
+ ['detail',['상세주소','상세','동호수','detail']],
+ ['name',['이름','성명','수신자','받는분','받는사람','수령인','수령자','고객명','성함','name','주문자']],
+ ['phone',['전화번호','전화','연락처','핸드폰','휴대폰','휴대전화','폰','hp','tel','phone','mobile','번호']],
+ ['address',['주소','배송지','배송주소','도로명','address','addr']],
+ ['items',['주문상품','주문','상품명','상품','품목','품명','물품','제품','item','order','product']],
+ ['memo',['배송메모','메모','요청사항','특이사항','비고','요청','참고','note','memo']]];
+function matchLabel(l){const n=l.toLowerCase().replace(/[\s\[\]()<>]/g,'');for(const[f,kws]of LABELS)for(const k of kws)if(n===k||(n.startsWith(k)&&n.length<=k.length+2))return f;return null}
+const PHONE=/01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}/;
+const ADDR=/^(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주|충청|전라|경상)|[가-힣]+(시|도)\s+[가-힣]+(구|군|시)|[가-힣0-9]+(로|길)\s*\d+/;
+const DETAIL=/\d+\s*(동|호|층)|아파트|빌라|오피스텔|빌딩|맨션|원룸|^\d+(-\d+)?$/;
+const MEMO=/부재|문\s*앞|경비|현관|배송\s*전|전화\s*주|연락\s*주|조심|파손|비번|비밀번호|택배함|무인|킵/;
+function splitAddr(a){a=a.trim();let m=a.match(/^(.+?),\s*(.+)$/);if(m&&ADDR.test(m[1]))return[m[1].trim(),m[2].trim()];
+ m=a.match(/^(.*?(?:로|길)\s*\d+(?:-\d+)?(?:\s*\([^)]*\))?)\s+(.+)$/);if(m)return[m[1],m[2]];
+ m=a.match(/^(.*?\d+(?:-\d+)?(?:번지)?)\s+((?:[가-힣A-Za-z]+\s*)?\d+동.*|\d+호.*|\d+층.*)$/);if(m)return[m[1],m[2]];return[a,'']}
+function parseOne(text){
+ const o={name:'',phone:'',zip:'',address:'',detail:'',items:[],memo:[]};let lastAddr=false;
+ const lines=text.split(/\r?\n/).map(l=>l.replace(/^\[[^\]]*\]\s*\[[^\]]*\]\s*/,'').replace(/^(?:[-•·*▶▷■□○●◆◇☞✔✓]+|\d{1,2}[.)](?=\s))\s*/,'').trim()).filter(Boolean);
+ const put=(f,v)=>{v=v.trim();if(!v)return;
+  if(f==='phone'){if(!o.phone)o.phone=fmtPhone(v.match(PHONE)?.[0]||v);return}
+  if(f==='address'){if(!o.address){const[a,d]=splitAddr(v);o.address=a;if(d&&!o.detail)o.detail=d}else if(!o.detail)o.detail=v;lastAddr=true;return}
+  if(f==='detail'){o.detail=o.detail?o.detail+' '+v:v;return}
+  if(f==='zip'){o.zip=digits(v).slice(0,5);return}
+  if(f==='name'){if(!o.name)o.name=v.replace(/\s*님$/,'');else o.memo.push(v);return}
+  if(f==='items'){o.items.push(v);return}
+  if(f==='memo'){o.memo.push(v)}};
+ const classify=seg=>{seg=seg.trim();if(!seg)return;
+  const pm=seg.match(PHONE);
+  if(pm){put('phone',pm[0]);const rest=seg.replace(pm[0],' ').replace(/^[\s,\/|:-]+|[\s,\/|:-]+$/g,'');if(rest)classify(rest);lastAddr=false;return}
+  const zm=seg.match(/^\(?(\d{5})\)?\s*(.*)$/);if(zm&&(!zm[2]||ADDR.test(zm[2]))){o.zip=zm[1];if(zm[2])put('address',zm[2]);return}
+  if(ADDR.test(seg)&&!o.address){put('address',seg);return}
+  if(lastAddr&&!o.detail&&(DETAIL.test(seg)||seg.length<=12)&&!MEMO.test(seg)){o.detail=seg;lastAddr=false;return}
+  lastAddr=false;
+  if(/^[가-힣]{2,4}(\s*님)?$/.test(seg)&&!o.name){put('name',seg);return}
+  if(MEMO.test(seg)){o.memo.push(seg);return}
+  o.items.push(seg)};
+ for(const line of lines){
+  const lm=line.match(/^([^:：]{1,10})\s*[:：]\s*(.*)$/);
+  if(lm){const f=matchLabel(lm[1]);if(f){put(f,lm[2]);if(f!=='address')lastAddr=false;continue}}
+  const sm=line.match(/^(\S+)\s+(.+)$/);
+  if(sm&&!PHONE.test(sm[1])){const f=matchLabel(sm[1]);if(f&&f!=='items'&&f!=='memo'){put(f,sm[2]);if(f!=='address')lastAddr=false;continue}}
+  line.split(/\s*[\/|]\s*/).forEach(classify)}
+ return{name:o.name,phone:o.phone,zip:o.zip,address:o.address,detail:o.detail,items:o.items.join(', '),memo:o.memo.join(', ')}}
+function parseKakao(text){
+ const phones=(text.match(new RegExp(PHONE.source,'g'))||[]).length;
+ if(phones>1){const blocks=text.split(/\n\s*(?:[-=_~*]{3,}\s*)?\n/).filter(b=>PHONE.test(b));if(blocks.length>1)return blocks.map(parseOne)}
+ return[parseOne(text)]}
+
+
+const digits = (s) => String(s ?? "").replace(/\D/g, "");
+function fmtPhone(s) { const d = digits(s); if (d.length === 11) return d.slice(0, 3) + "-" + d.slice(3, 7) + "-" + d.slice(7); if (d.length === 10) return d.slice(0, 3) + "-" + d.slice(3, 6) + "-" + d.slice(6); return String(s ?? "").trim(); }
+const t0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const isToday = (iso) => !!iso && new Date(iso) >= t0();
+const REMOTE = /제주|울릉|옹진군|신안군|백령|연평|덕적|자월|영흥면|흑산|거문|추자|우도면|욕지|한산면|사량|조도면|청산면|소안면|보길|노화|금일|생일면|금당|비금|도초|하의|장산|안좌|자은|암태|임자면/;
+const region = (a) => (a || "").split(/\s+/).slice(0, 2).join(" ").slice(0, 14);
+const prettyD = (d) => { const [y, m, dd] = String(d).split("-"); const w = "일월화수목금토"[new Date(2000 + +y, m - 1, +dd).getDay()]; return `${+m}/${+dd}(${w})`; };
+
+const P = { list: [], loaded: false, open: false, date: "", selId: null, view: "orders", pend: null, copied: "", editing: false, q: "", bulk: [], chan: null };
+const byId = (id) => P.list.find((c) => c.id === id);
+const byNick = (n) => P.list.find((c) => c.nick === n) || P.list.find((c) => !c.nick && c.name === n);
+const byPhone = (p) => { const d = digits(p); return d.length >= 10 ? P.list.find((c) => digits(c.phone) === d) : null; };
+const arr = (v) => (Array.isArray(v) ? v : []);
+function warns(c) {
+  const w = []; const a = (c.address || "") + " " + (c.address_detail || "");
+  if (REMOTE.test(a)) w.push(["제주·도서산간 — 추가운임 확인", ""]);
+  if (/아파트|타운|빌|맨션|하이츠|캐슬|자이|푸르지오|힐스테이트|래미안|더샵|아이파크|오피스텔|빌라|원룸/.test(a) && !/\d+\s*호|\d+-\d+\s*$|\d{3,4}\s*[.)]?\s*$|\d+층/.test(a)) w.push(["동·호수 확인", ""]);
+  if (!c.address) w.push(["주소 없음", ""]);
+  if (digits(c.phone).length < 10) w.push(["전화번호 확인", ""]);
+  const n = arr(c.history).filter((h) => isToday(h.date)).length; if (n >= 2) w.push([`오늘 주문 ${n}건 — 합포장`, "info"]);
+  return w;
+}
+
+/* ── 저장소 ── */
+async function load() {
+  const rows = await selectAll("parcel_customers");
+  P.list = rows.map((r) => ({ ...r, applied: arr(r.applied), history: arr(r.history) })); P.loaded = true;
+}
+async function put(c) {
+  const row = { ...c, shop_id: SHOP, updated_at: c.updated_at || new Date().toISOString() };
+  if (!row.id) row.id = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+  const i = P.list.findIndex((x) => x.id === row.id); if (i >= 0) P.list[i] = row; else P.list.push(row);
+  paint(); renderCustHint();
+  try { await q(sb.from("parcel_customers").upsert(row, { onConflict: "id" })); } catch (e) { console.error(e); toast(errMsg(e), "err"); }
+  return row;
+}
+async function del(id) {
+  P.list = P.list.filter((c) => c.id !== id); if (P.selId === id) P.selId = null; paint();
+  try { await q(sb.from("parcel_customers").delete().eq("id", id)); } catch (e) { console.error(e); toast(errMsg(e), "err"); }
+}
+let reloadT = null;
+function live() {
+  if (P.chan) return;
+  P.chan = sb.channel("parcel-" + SHOP).on("postgres_changes", { event: "*", schema: "public", table: "parcel_customers" }, () => {
+    clearTimeout(reloadT); reloadT = setTimeout(async () => { try { await load(); paint(); renderCustHint(); } catch {} }, 600);
+  }).subscribe();
+}
+
+/* ── 혜마켓오더 주문 → 주문자별 묶음 ── */
+const isPaidO = (o) => o.isPaid || o.isCard;
+function dates() {
+  const m = {}; S.orders.forEach((o) => { if (/^\d{2}-\d{2}-\d{2}$/.test(o.date)) (m[o.date] = m[o.date] || new Set()).add(o.customerName); });
+  return Object.keys(m).sort().reverse().slice(0, 12).map((d) => ({ date: d, c: m[d].size }));
+}
+function rowsOf(date) {
+  const g = {};
+  S.orders.filter((o) => o.date === date).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).forEach((o) => {
+    const r = g[o.customerName] = g[o.customerName] || { name: o.customerName, items: [], amount: 0, paid: true, n: 0 };
+    r.amount += amt(o); r.n++; if (!isPaidO(o) && !isExtra(o)) r.paid = false;
+    if (!isExtra(o)) r.items.push(`${o.productNumber || ""}${o.size ? " " + o.size : ""} x${o.quantity}`.trim());
+  });
+  return Object.values(g).map((r) => ({ ...r, items: r.items.join(", ") })).sort((a, b) => cmp(a.name, b.name));
+}
+async function applyOrder(r, c) {
+  const now = new Date().toISOString(); const n = (c.order_count || 1) + 1;
+  await put({ ...c, nick: c.nick || r.name, order_count: n, is_regular: n >= 10 ? true : !!c.is_regular, memo: r.items, tracking: "", shipped_at: null, updated_at: now,
+    applied: [...arr(c.applied), P.date].slice(-30), history: [{ date: now, text: `[${P.date} 오더] ${r.items}` }, ...arr(c.history)].slice(0, 20) });
+}
+
+/* ── 저장 (카톡·수동) ── */
+async function saveOrder(p) {
+  if (!p.name && !p.phone) { toast("이름이나 전화번호가 있어야 저장돼요", "warn"); return; }
+  const now = new Date().toISOString(); const memo = [p.items, p.memo].filter(Boolean).join(", "); const keep = memo.includes("킵");
+  const ex = p.phone ? byPhone(p.phone) : null;
+  const hist = memo && !P.pend ? [{ date: now, text: memo }] : [];
+  const link = (c) => { if (!P.pend) return c; const h = P.pend.items ? [{ date: now, text: `[${P.pend.date} 오더] ${P.pend.items}` }] : []; return { ...c, nick: P.pend.nick, applied: [...arr(c.applied), P.pend.date].slice(-30), history: [...h, ...arr(c.history)].slice(0, 20) }; };
+  let saved;
+  if (ex) {
+    const n = (ex.order_count || 1) + 1;
+    saved = await put(link({ ...ex, name: p.name || ex.name, phone: p.phone || ex.phone, zip: p.zip || ex.zip || "", address: p.address || ex.address, address_detail: p.address ? (p.detail || "") : ex.address_detail,
+      memo: memo || ex.memo, order_count: n, tracking: "", shipped_at: null, is_regular: n >= 10 ? true : !!ex.is_regular, is_keep: keep || !!ex.is_keep, updated_at: now, history: [...hist, ...arr(ex.history)].slice(0, 20) }));
+    toast(`${saved.name || saved.phone}님 정보 갱신 (주문 ${n}회)`);
+  } else {
+    saved = await put(link({ name: p.name, nick: "", phone: p.phone, zip: p.zip || "", address: p.address, address_detail: p.detail || "", memo, order_count: 1, is_regular: false, is_keep: keep, tracking: "", shipped_at: null, applied: [], history: hist, created_at: now, updated_at: now }));
+    toast(`${saved.name || saved.phone}님 새 고객으로 저장`);
+  }
+  P.selId = saved.id; P.parsed = []; P.forceInput = true;
+  if (P.pend) {
+    const done = P.pend.nick; P.pend = null;
+    const nx = rowsOf(P.date).find((r) => r.name !== done && !byNick(r.name));
+    if (nx) { P.pend = { nick: nx.name, date: P.date, items: nx.items }; P.view = "input"; P.forceInput = true; paint(); setTimeout(() => $("#pcKakao") && $("#pcKakao").focus(), 30); toast(`저장 완료 → 다음: ${nx.name}님 카톡 주소를 붙여넣으세요`); return; }
+    toast("주소 필요 고객을 모두 등록했어요 ✓"); P.view = "orders"; P.forceInput = true; paint(); return;
+  }
+  P.view = "card"; paint();
+}
+
+/* ── 송장·안내·엑셀 ── */
+const loisText = (c) => { const m = digits(c.phone).match(/^(\d{3})(\d{3,4})(\d{4})$/); return [m ? m[1] : "", m ? m[2] : "", m ? m[3] : "", "", c.name || ""].join("\t"); };
+const shipMsg = (c) => `[${S.config.storeName || CFG.title || "혜마켓"}] ${c.name || ""}님, 주문하신 상품이 발송되었어요!\nCJ대한통운 송장번호: ${c.tracking}\n배송조회: CJ대한통운 앱·홈페이지 또는 카카오톡 'CJ대한통운' 채널에서 송장번호로 조회하실 수 있어요.`;
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; } catch {}
+  try { const ta = document.createElement("textarea"); ta.value = t; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(ta); ta.select(); const ok = document.execCommand("copy"); ta.remove(); return ok; } catch { return false; }
+}
+function todayList() { return P.list.filter((c) => isToday(c.updated_at) && !c.is_keep).sort((a, b) => cmp(a.name, b.name)); }
+const shippedToday = (c) => c.tracking && isToday(c.shipped_at);
+function queue() { return todayList().filter((c) => !shippedToday(c)).map((c) => c.id); }
+function nextId() { const qq = queue(); if (!qq.length) return null; const i = qq.indexOf(P.selId); const n = qq[(i + 1) % qq.length]; return n === P.selId ? null : n; }
+function exportToday() {
+  const list = todayList(); if (!list.length) { toast("오늘 송장 목록이 비어 있어요", "warn"); return; }
+  const H = ["받는사람명", "받는사람 전화번호", "받는사람 우편번호", "받는사람 주소", "받는사람 상세주소", "품목명", "수량", "배송메시지", "운송장번호"];
+  const rows = list.map((c) => { const it = arr(c.history).filter((h) => isToday(h.date)).map((h) => h.text).join(" / ") || c.memo || ""; return [c.name, c.phone, c.zip, c.address, c.address_detail, it, 1, "", c.tracking]; });
+  const ws = XLSX.utils.aoa_to_sheet([H, ...rows]); ws["!cols"] = [10, 15, 10, 40, 22, 30, 6, 20, 15].map((w) => ({ wch: w }));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "오늘송장"); saveWorkbook(wb, `${fileTag()}_오늘송장_${toShort(new Date())}.xlsx`);
+}
+function exportBook() {
+  const H = ["이름", "오더 닉네임", "전화번호", "우편번호", "주소", "상세주소", "기타", "주문횟수", "단골", "킵", "송장번호"];
+  const rows = [...P.list].sort((a, b) => cmp(a.name, b.name)).map((c) => [c.name, c.nick, c.phone, c.zip, c.address, c.address_detail, c.memo, c.order_count, c.is_regular ? "O" : "", c.is_keep ? "O" : "", c.tracking]);
+  const ws = XLSX.utils.aoa_to_sheet([H, ...rows]); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "택배주소록"); saveWorkbook(wb, `${fileTag()}_택배주소록_${toShort(new Date())}.xlsx`);
+}
+function parseBulk(text) {
+  const res = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim(); if (!line) continue;
+    const pm = line.match(PHONE); const rest = pm ? line.replace(pm[0], " ") : line;
+    const tm = rest.replace(/(\d)[-\s](?=\d)/g, "$1").match(/(?<!\d)\d{10,12}(?!\d)/);
+    if (!tm) { res.push({ line, err: "송장번호 없음" }); continue; }
+    let c = pm ? byPhone(pm[0]) : null;
+    if (!c) { const hits = P.list.filter((x) => x.name && line.includes(x.name)); if (hits.length === 1) c = hits[0]; else if (hits.length > 1) { res.push({ line, err: "같은 이름 여러 명" }); continue; } }
+    res.push(c ? { line, c, trk: tm[0] } : { line, err: "고객 못 찾음" });
+  }
+  return res;
+}
+
+/* ── 화면 ── */
+const H = (s) => esc(s);
+function rowItem(c, kind) {
+  const w = warns(c).some((x) => !x[1]);
+  return `<div class="pc-row${c.id === P.selId ? " sel" : ""}"><button class="pc-pick" data-pid="${H(c.id)}"><b>${H(c.name || "이름없음")}</b> <small>${H(c.phone || "-")}</small>${c.is_regular ? ' <span class="pc-tag reg">단골</span>' : ""}${c.is_keep ? ' <span class="pc-tag keep">킵</span>' : ""}${shippedToday(c) ? ' <span class="pc-tag ok">송장✓</span>' : ""}${w ? ' <span class="pc-tag warn">⚠</span>' : ""}<span class="pc-sub">${H(region(c.address))}${c.nick && c.nick !== c.name ? " · 오더: " + H(c.nick) : ""}</span></button>${kind === "all" ? `<button class="pc-x" data-pdel="${H(c.id)}" title="삭제">🗑</button>` : ""}</div>`;
+}
+function ordersHTML() {
+  const ds = dates(); if (!P.date && ds.length) P.date = ds[0].date;
+  let h = `<div class="pc-days">${ds.map((d) => `<button data-pday="${H(d.date)}" class="${d.date === P.date ? "on" : ""}">${H(prettyD(d.date))} <small>${d.c}명</small></button>`).join("") || '<span class="muted">주문이 없어요</span>'}</div>`;
+  if (!P.date) return h;
+  const rows = rowsOf(P.date).map((r) => { const c = byNick(r.name); return { r, c, done: !!(c && arr(c.applied).includes(P.date)) }; });
+  const ready = rows.filter((x) => x.c && !x.done && x.r.paid), unpaid = rows.filter((x) => x.c && !x.done && !x.r.paid), need = rows.filter((x) => !x.c), done = rows.filter((x) => x.done);
+  h += `<div class="pc-sum">주문자 <b>${rows.length}명</b> · 연결됨 ${ready.length + unpaid.length + done.length} · <b class="pc-acc">주소 필요 ${need.length}</b></div>`;
+  if (ready.length) h += `<button class="btn primary pc-wide" data-pact="all">✓ 입금·주소 확인된 ${ready.length}명 한 번에 송장 목록에 추가</button>`;
+  if (need.length) h += `<button class="btn pc-wide pc-orange" data-pact="needall">✎ 주소 필요 ${need.length}명 연속 등록 (카톡 붙여넣기 → Ctrl+Enter → 자동 다음)</button>`;
+  if (!ready.length && !need.length && done.length) h += `<div class="pc-done">✓ 이 방송 정리 끝! <button class="btn sm primary" data-pact="xls">⬇ 오늘 송장엑셀</button></div>`;
+  const one = (x) => {
+    const r = x.r, c = x.c;
+    const head = `<div class="pc-oh"><b>${H(r.name)}</b>${r.paid ? "" : ' <span class="pc-tag warn">미입금</span>'} <small class="muted">${won(r.amount)} · ${r.n}건</small></div><div class="pc-it">${H(r.items)}</div>`;
+    if (x.done) return `<div class="pc-o done">${head}<div class="pc-oa">✓ 추가됨 → ${H(c.name)} (${H(region(c.address))})</div></div>`;
+    if (c && !r.paid) return `<div class="pc-o">${head}<div class="pc-oa"><span>📦 ${H(c.name)} · 입금 확인 후 추가</span><button class="btn sm" data-padd="${H(r.name)}">그래도 추가</button></div></div>`;
+    if (c) return `<div class="pc-o ok">${head}<div class="pc-oa"><span>📦 ${H(c.name)} · ${H(c.phone)} · ${H(region(c.address))}</span><button class="btn sm" data-padd="${H(r.name)}">추가</button><button class="btn sm" data-punlink="${H(c.id)}" title="연결 해제">✕</button></div></div>`;
+    return `<div class="pc-o need">${head}<div class="pc-oa"><input class="inp" list="pcBook" data-plink="${H(r.name)}" placeholder="주소록에서 찾기 (이름·번호)"><button class="btn sm pc-orange" data-pnew="${H(r.name)}">카톡 주소로 새 등록</button></div></div>`;
+  };
+  return h + [...need, ...ready, ...unpaid, ...done].map(one).join("");
+}
+function listHTML() {
+  const tl = todayList(); const doneN = tl.filter(shippedToday).length;
+  const qs = P.q.trim().toLowerCase(), qd = digits(P.q);
+  const found = qs ? P.list.filter((c) => (c.name || "").toLowerCase().includes(qs) || (c.nick || "").toLowerCase().includes(qs) || (qd.length >= 3 && digits(c.phone).includes(qd))).sort((a, b) => cmp(a.name, b.name)).slice(0, 40) : null;
+  return `<input class="inp" id="pcQ" placeholder="🔍 주소록 검색 (이름·닉네임·번호) — 총 ${P.list.length}명" value="${H(P.q)}">
+    ${found ? `<div class="pc-lh">검색 결과 ${found.length}명</div>${found.map((c) => rowItem(c, "all")).join("") || '<div class="pc-empty">없어요</div>'}` :
+    `<div class="pc-lh">🕘 오늘 송장 목록 <span class="muted">송장 ${doneN}/${tl.length}</span></div>${tl.map((c) => rowItem(c, "today")).join("") || '<div class="pc-empty">왼쪽에서 방송 주문을 추가하면 여기에 쌓여요</div>'}
+     <div class="pc-lh">🔖 킵 고객</div>${P.list.filter((c) => c.is_keep).map((c) => rowItem(c, "keep")).join("") || '<div class="pc-empty">기타 칸에 ‘킵’이라고 쓰면 여기로 모여요</div>'}`}`;
+}
+function cardHTML() {
+  const c = byId(P.selId);
+  if (!c) return `<div class="pc-empty" style="padding:40px 10px">📦<br>고객을 고르면 송장 카드가 떠요</div>`;
+  if (P.editing) return `<form id="pcEdit">${[["name", "받는분"], ["phone", "전화번호"], ["address", "주소"], ["address_detail", "상세주소"], ["memo", "기타 (킵 입력 시 킵고객)"], ["nick", "혜마켓오더 닉네임 (자동 연결용)"]].map(([k, l]) => `<div class="field" style="margin-bottom:8px"><label>${l}</label><input class="inp" name="${k}" value="${H(c[k])}"></div>`).join("")}<div class="row"><button class="btn primary" type="submit" style="flex:1">저장</button><button class="btn" type="button" data-pact="cancel">취소</button></div></form>`;
+  const ws = warns(c); const nx = nextId();
+  return `<div class="pc-card"><div class="pc-ctop"><b>${H(c.name || "이름없음")}</b> <small>주문 ${c.order_count || 1}회</small><span class="pc-acts"><button data-pact="edit">수정</button><button data-pact="keep" class="${c.is_keep ? "on" : ""}">킵</button><button data-pact="reg" class="${c.is_regular ? "on" : ""}">단골</button></span></div>
+    <div class="pc-lines"><div>받는분</div><div class="big">${H(c.name || "-")}</div><div>전화번호</div><div class="big">${H(c.phone || "-")}</div><div>주소</div><div>${H([c.zip ? "(" + c.zip + ")" : "", c.address, c.address_detail].filter(Boolean).join(" ") || "-")}</div><div>기타</div><div>${H(c.memo || "-")}</div></div>
+    ${ws.length ? `<div class="pc-warns">${ws.map(([t, k]) => `<span class="pc-w ${k}">${k ? "📦" : "⚠"} ${H(t)}</span>`).join("")}</div>` : ""}
+    <div class="pc-copy"><button class="btn pc-blue ${P.copied === "lois" ? "done" : ""}" data-pact="lois">${P.copied === "lois" ? "✓ 복사됨" : "① 받는분 복사"}</button><button class="btn pc-orange ${P.copied === "addr" ? "done" : ""}" data-pact="addr">${P.copied === "addr" ? "✓ 복사됨" : "② 주소 복사"}</button></div>
+    <div class="pc-hint">① LOIS 받는분 <b>전화번호 첫 칸</b>에 Ctrl+V &nbsp;② <b>주소 칸</b>에 Ctrl+V &nbsp;· 단축키 <kbd>1</kbd><kbd>2</kbd><kbd>N</kbd></div>
+    <div class="pc-ship"><input class="inp" id="pcTrk" inputmode="numeric" placeholder="송장번호 (10~12자리)" value="${H(c.tracking || "")}"><button class="btn" data-pact="trk">송장 저장</button><button class="btn" data-pact="msg" ${c.tracking ? "" : "disabled"}>발송 안내 복사</button></div>
+    ${nx ? `<button class="btn pc-wide" data-pact="next">다음 송장 대기 고객 ▶ <small class="muted">(남은 ${queue().filter((x) => x !== c.id).length}명)</small></button>` : ""}
+    ${arr(c.history).length ? `<ul class="pc-hist">${arr(c.history).slice(0, 5).map((h) => `<li>${H(new Date(h.date).toLocaleDateString("ko-KR"))} · ${H(h.text)}</li>`).join("")}</ul>` : ""}</div>`;
+}
+function inputHTML() {
+  const pend = P.pend ? `<div class="pc-pend">📥 오더 주문자 <b>${H(P.pend.nick)}</b>님 카톡 주소를 붙여넣고 <b>Ctrl+Enter</b> (남은 ${rowsOf(P.date).filter((r) => !byNick(r.name)).length}명) <button class="btn sm" data-pact="pendx">취소</button></div>` : "";
+  const ps = (P.parsed || []).filter((p) => p.name || p.phone || p.address);
+  return `${pend}<textarea class="inp" id="pcKakao" rows="6" placeholder="카톡 주문 메시지를 그대로 붙여넣으세요 (Ctrl+Enter 저장)&#10;&#10;김민수&#10;010-1234-5678&#10;서울 강남구 테헤란로 123 456호"></textarea>
+    <div id="pcParsed">${ps.map((p, i) => { const ex = p.phone && byPhone(p.phone); const cell = (l, v) => `<span>${l}</span><span class="${v ? "" : "c-danger"}">${H(v || "못 찾음")}</span>`;
+      return `<div class="pc-parsed"><div class="pc-oh"><b>📋 인식된 주문${ps.length > 1 ? " " + (i + 1) : ""}</b> ${ex ? `<span class="pc-tag keep">기존 · ${ex.order_count || 1}회</span>` : '<span class="pc-tag reg">새 고객</span>'}</div>
+      <div class="pc-kv">${cell("이름", p.name)}${cell("전화", p.phone)}${cell("주소", [p.zip ? "(" + p.zip + ")" : "", p.address].filter(Boolean).join(" "))}${p.detail ? cell("상세", p.detail) : ""}${p.items || p.memo ? cell("기타", [p.items, p.memo].filter(Boolean).join(", ")) : ""}</div>
+      <button class="btn primary pc-wide" data-psave="${i}">고객 주소록에 저장</button></div>`; }).join("")}</div>`;
+}
+function paint() {
+  const root = $("#pcRoot"); if (!root || !P.open) return;
+  const ae = document.activeElement; const keep = ae && root.contains(ae) && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA") ? { id: ae.id, plink: ae.dataset && ae.dataset.plink, s: ae.selectionStart } : null;
+  root.dataset.view = P.view; root.querySelectorAll(".pc-tabs button,.pc-side-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.pview === P.view || (!!b.closest(".pc-side-tabs") && b.dataset.pview === "card" && P.view !== "input")));
+  if (keep && keep.plink) { paintSide(); return; }
+  root.querySelector(".pc-sync").textContent = `주소록 ${P.list.length}명`;
+  root.querySelector("#pcOrders").innerHTML = ordersHTML();
+  root.querySelector("#pcList").innerHTML = listHTML();
+  paintSide();
+  root.querySelector("#pcBook").innerHTML = [...P.list].sort((a, b) => cmp(a.name, b.name)).map((c) => `<option value="${H(c.name + " " + c.phone)}"></option>`).join("");
+  if (keep && keep.id === "pcQ") { const el = $("#pcQ"); el.focus(); try { el.setSelectionRange(keep.s, keep.s); } catch {} }
+}
+function paintSide() {
+  const root = $("#pcRoot"); if (!root) return;
+  root.querySelector("#pcCard").innerHTML = cardHTML();
+  const inp = root.querySelector("#pcInput"); const ta = inp.querySelector("#pcKakao");
+  if (!ta || P.forceInput || document.activeElement !== ta) inp.innerHTML = inputHTML();
+  else { const tmp = document.createElement("div"); tmp.innerHTML = inputHTML(); inp.querySelector("#pcParsed").innerHTML = tmp.querySelector("#pcParsed").innerHTML; const pd = inp.querySelector(".pc-pend"), npd = tmp.querySelector(".pc-pend"); if (pd) pd.remove(); if (npd) inp.insertBefore(npd, ta); }
+  P.forceInput = false;
+}
+function openCenter(view) {
+  P.open = true; if (view) P.view = view;
+  let root = $("#pcRoot");
+  if (!root) {
+    root = document.createElement("div"); root.id = "pcRoot";
+    root.innerHTML = `<div class="pc-bar"><b>📦 택배 센터</b><span class="pc-sync muted">주소록 ${P.list.length}명</span><span style="flex:1"></span>
+      <button class="btn sm" data-pact="bulk">🧾 송장 일괄입력</button><button class="btn sm" data-pact="xls">⬇ 오늘 송장엑셀</button><button class="btn sm desk-only" data-pact="book">⬇ 주소록</button><button class="btn sm" data-pact="close">✕ 닫기</button></div>
+      <div class="pc-tabs"><button data-pview="orders">🧾 방송 주문</button><button data-pview="list">📋 송장 목록</button><button data-pview="input">💬 카톡 입력</button><button data-pview="card">📦 송장 카드</button></div>
+      <div class="pc-grid"><section class="pc-col" id="pcOrders"></section><section class="pc-col" id="pcList"></section><section class="pc-col pc-side"><div class="pc-side-tabs"><button data-pview="card">📦 송장 카드</button><button data-pview="input">💬 카톡·새 고객</button></div><div id="pcCard"></div><div id="pcInput"></div></section></div><datalist id="pcBook"></datalist>`;
+    document.body.appendChild(root); bindCenter(root);
+  }
+  root.classList.remove("hide"); document.body.style.overflow = "hidden";
+  root.querySelector(".pc-sync").textContent = `주소록 ${P.list.length}명`;
+  paint();
+}
+function closeCenter() { P.open = false; const r = $("#pcRoot"); if (r) r.classList.add("hide"); document.body.style.overflow = ""; renderCustHint(); }
+async function openBulk() {
+  let parsed = [];
+  const ok = await modal({ title: "🧾 송장번호 일괄입력", okText: "적용",
+    bodyHTML: `<p class="muted" style="margin-top:-4px">LOIS 출력 목록·엑셀에서 <b>받는분 전화번호(또는 이름)와 송장번호</b>가 있는 줄을 그대로 붙여넣으세요.</p><textarea class="inp" id="pbT" rows="7" style="width:100%" placeholder="김민수	010-1234-5678	689123456789"></textarea><div id="pbR" class="muted" style="font-size:12.5px;margin-top:8px;max-height:150px;overflow:auto"></div><button type="button" class="btn sm" id="pbMsg" style="margin-top:8px">💬 오늘 발송 안내 전체 복사</button>`,
+    onMount: (r) => {
+      r.querySelector(".modal").style.maxWidth = "560px";
+      r.querySelector("#pbT").addEventListener("input", (e) => { parsed = parseBulk(e.target.value); const okN = parsed.filter((x) => x.c).length;
+        r.querySelector("#pbR").innerHTML = parsed.length ? `<b>${okN}건 매칭</b>${parsed.length - okN ? ` · ${parsed.length - okN}건 확인 필요` : ""}<br>` + parsed.map((x) => x.c ? `✓ ${H(x.c.name)} ${H(x.c.phone)} → ${H(x.trk)}` : `<span class="c-danger">✕ ${H(x.err)}: ${H(x.line.slice(0, 40))}</span>`).join("<br>") : ""; });
+      r.querySelector("#pbMsg").addEventListener("click", async () => { const l = P.list.filter(shippedToday); if (!l.length) { toast("오늘 송장 입력된 고객이 없어요", "warn"); return; } if (await copyText(l.map(shipMsg).join("\n\n────────\n\n"))) toast(`발송 안내 ${l.length}건 복사 — 카톡에 붙여넣으세요`); });
+      setTimeout(() => r.querySelector("#pbT").focus(), 40);
+    }, validate: () => true });
+  if (!ok) return;
+  const good = parsed.filter((x) => x.c); if (!good.length) { toast("적용할 송장번호가 없어요", "warn"); return; }
+  busy("송장번호 입력 중…");
+  try { for (const x of good) { const c = byId(x.c.id); if (c) await put({ ...c, tracking: x.trk, shipped_at: new Date().toISOString() }); } } finally { busy(""); }
+  toast(`송장번호 ${good.length}건 입력 완료`);
+}
+function bindCenter(root) {
+  root.addEventListener("click", async (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const d = b.dataset; const c = byId(P.selId);
+    if (d.pview) { P.view = d.pview; paint(); return; }
+    if (d.pday) { P.date = d.pday; paint(); return; }
+    if (d.pid) { P.selId = d.pid; P.editing = false; P.copied = ""; P.view = "card"; paint(); return; }
+    if (d.pdel) { const x = byId(d.pdel); if (await modal({ title: "주소록에서 삭제할까요?", message: `${x ? x.name : ""}님 — 되돌릴 수 없어요. (주문은 그대로예요)`, okText: "삭제", danger: true })) del(d.pdel); return; }
+    if (d.padd) { const r = rowsOf(P.date).find((x) => x.name === d.padd); const cc = r && byNick(r.name); if (cc) { await applyOrder(r, cc); toast(`${cc.name}님 추가`); } return; }
+    if (d.punlink) { const x = byId(d.punlink); if (x && await modal({ title: "연결을 끊을까요?", message: `${x.name}님과 오더 닉네임 연결을 끊어요.`, okText: "끊기" })) put({ ...x, nick: "" }); return; }
+    if (d.pnew) { const r = rowsOf(P.date).find((x) => x.name === d.pnew); P.pend = { nick: r.name, date: P.date, items: r.items }; P.view = "input"; P.forceInput = true; paint(); setTimeout(() => $("#pcKakao") && $("#pcKakao").focus(), 30); return; }
+    if (d.psave !== undefined) { const p = (P.parsed || []).filter((x) => x.name || x.phone || x.address)[+d.psave]; if (p) saveOrder(p); return; }
+    switch (d.pact) {
+      case "close": closeCenter(); break;
+      case "bulk": openBulk(); break;
+      case "xls": exportToday(); break;
+      case "book": exportBook(); break;
+      case "all": { const list = rowsOf(P.date).map((r) => ({ r, c: byNick(r.name) })).filter((x) => x.c && x.r.paid && !arr(x.c.applied).includes(P.date)); busy("송장 목록에 추가 중…"); try { for (const x of list) { const cc = byId(x.c.id); if (cc) await applyOrder(x.r, cc); } } finally { busy(""); } toast(`${list.length}명을 송장 목록에 추가했어요`); break; }
+      case "needall": { const nx = rowsOf(P.date).find((r) => !byNick(r.name)); if (nx) { P.pend = { nick: nx.name, date: P.date, items: nx.items }; P.view = "input"; P.forceInput = true; paint(); setTimeout(() => $("#pcKakao") && $("#pcKakao").focus(), 30); } break; }
+      case "pendx": P.pend = null; P.forceInput = true; paint(); break;
+      case "edit": P.editing = true; paint(); break;
+      case "cancel": P.editing = false; paint(); break;
+      case "keep": if (c) put({ ...c, is_keep: !c.is_keep }); break;
+      case "reg": if (c) put({ ...c, is_regular: !c.is_regular }); break;
+      case "next": { const n = nextId(); if (n) { P.selId = n; P.copied = ""; paint(); } break; }
+      case "lois": case "addr": if (c) { const t = d.pact === "lois" ? loisText(c) : [c.address || "", c.address_detail || ""].join("\t").trim(); if (!t.trim()) { toast("복사할 정보가 없어요", "warn"); break; }
+        if (await copyText(t)) { P.copied = d.pact; paint(); toast(d.pact === "lois" ? "받는분 복사 — LOIS 전화번호 첫 칸에 Ctrl+V" : "주소 복사 — LOIS 주소 칸에 Ctrl+V"); setTimeout(() => { P.copied = ""; paint(); }, 1800); } else toast("복사가 막혔어요", "err"); } break;
+      case "trk": if (c) { const v = digits($("#pcTrk").value); if (v && (v.length < 10 || v.length > 12)) { toast("송장번호는 10~12자리 숫자예요", "warn"); break; } await put({ ...c, tracking: v, shipped_at: v ? new Date().toISOString() : null }); toast(v ? "송장번호 저장" : "송장번호 삭제"); } break;
+      case "msg": if (c && c.tracking && await copyText(shipMsg(c))) toast("발송 안내 복사 — 고객 카톡에 붙여넣으세요"); break;
+    }
+  });
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "pcKakao") { P.parsed = parseKakao(e.target.value); paintSide(); }
+    if (e.target.id === "pcQ") { P.q = e.target.value; root.querySelector("#pcList").innerHTML = listHTML(); const el = $("#pcQ"); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  });
+  root.addEventListener("change", async (e) => {
+    const t = e.target; if (!t.dataset.plink) return;
+    const cc = byPhone(t.value.slice(-13)); if (!cc) { toast("목록에서 고객을 골라 주세요", "warn"); return; }
+    t.blur(); await put({ ...cc, nick: t.dataset.plink }); toast(`${t.dataset.plink} → ${cc.name} 연결 완료. 다음부터 자동이에요`);
+  });
+  root.addEventListener("submit", async (e) => {
+    if (e.target.id !== "pcEdit") return; e.preventDefault(); const c = byId(P.selId); if (!c) return;
+    const f = Object.fromEntries(new FormData(e.target)); P.editing = false;
+    await put({ ...c, name: f.name.trim(), phone: fmtPhone(f.phone), address: f.address.trim(), address_detail: f.address_detail.trim(), memo: f.memo.trim(), nick: f.nick.trim(), is_keep: c.is_keep || f.memo.includes("킵") });
+    toast("고객 정보를 수정했어요");
+  });
+  root.addEventListener("keydown", (e) => {
+    if (e.target.id === "pcKakao" && e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); const b = root.querySelector("[data-psave]"); if (b) b.click(); }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (!P.open || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === "Escape" && !$("#modalRoot").innerHTML) { closeCenter(); return; }
+    if (e.target.closest && e.target.closest("input,textarea,select")) return; if ($("#modalRoot").innerHTML) return;
+    const act = { "1": "lois", "2": "addr", n: "next", N: "next" }[e.key]; if (!act) return;
+    const b = root.querySelector(`#pcCard [data-pact="${act}"]`); if (b) { e.preventDefault(); if (window.innerWidth <= 900) { P.view = "card"; paint(); } b.click(); }
+  });
+}
+/* 주문 입력칸 고객 힌트에 붙는 택배 상태 */
+function hint(name) {
+  if (!P.loaded || !name) return "";
+  const c = byNick(name);
+  if (!c) return ` · <button type="button" class="linkbtn" data-pc-open="1" style="color:var(--warn)">⚠ 택배 주소 없음</button>`;
+  return ` · <button type="button" class="linkbtn" data-pc-sel="${H(c.id)}">📦 ${H(region(c.address))}${shippedToday(c) ? " · 송장✓" : ""}</button>`;
+}
+async function init() {
+  try { await load(); live(); } catch (e) { console.error("[택배]", e); }
+  const n = $("#bParcel"); if (n) n.classList.remove("hide");
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("[data-pc-open],[data-pc-sel]"); if (!b) return;
+    if (b.dataset.pcSel) { P.selId = b.dataset.pcSel; P.copied = ""; openCenter("card"); } else { P.date = S.dateFilter || P.date; openCenter("orders"); }
+  });
+  renderCustHint();
+}
+return { init, open: () => openCenter(), hint };
+})();
+
 let started = false;
 const idToEmail = (id) => { const s = String(id).trim().toLowerCase(); return s.includes("@") ? s : `${s}@${CFG.loginDomain || "liveorder.local"}`; };
 function showLogin(msg = "") {
@@ -1777,6 +2216,7 @@ async function startApp(session) {
     await Promise.all(TABLES.map((t) => loaders[t]()));
   } catch (e) { console.error(e); started = false; showLogin("데이터를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 로그인해 주세요."); return; }
   S.mode = "db"; afterFirstOrders(); render();
+  PCL.init();
   // 30일 지난 휴지통 정리
   const old = S.trash.filter((t) => Date.now() - (t.deletedAt || 0) > TRASH_DAYS * 86400000);
   if (old.length) api.purgeTrash(old.map((t) => t.id)).catch(() => {});

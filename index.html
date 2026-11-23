@@ -2193,6 +2193,8 @@ async function init() {
     if (b.dataset.pcSel) { P.selId = b.dataset.pcSel; P.copied = ""; openCenter("card"); } else { P.date = S.dateFilter || P.date; openCenter("orders"); }
   });
   renderCustHint();
+  const byHash = () => { if (location.hash === "#parcel" || location.hash === "#택배") openCenter("orders"); };
+  window.addEventListener("hashchange", byHash); byHash();
 }
 return { init, open: () => openCenter(), hint };
 })();

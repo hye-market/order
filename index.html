@@ -2018,12 +2018,24 @@ function todayList() { return P.list.filter((c) => isToday(c.updated_at) && !c.i
 const shippedToday = (c) => c.tracking && isToday(c.shipped_at);
 function queue() { return todayList().filter((c) => !shippedToday(c)).map((c) => c.id); }
 function nextId() { const qq = queue(); if (!qq.length) return null; const i = qq.indexOf(P.selId); const n = qq[(i + 1) % qq.length]; return n === P.selId ? null : n; }
-function exportToday() {
+/* LoIS 기업고객파일접수 — 혜마켓 등록 형식 '수하인 형식(통합형)' 열 순서(A~Q), 제목줄 없음 */
+const ymdOf = (iso) => { const d = iso ? new Date(iso) : new Date(); return String(d.getFullYear()).slice(2) + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0"); };
+const orderNo = (c) => "HM" + ymdOf(c.updated_at) + "-" + String(c.id).replace(/[^A-Za-z0-9]/g, "").slice(-4).toUpperCase();
+const loisSafe = (s, n) => String(s || "").replace(/\[\d{2}-\d{2}-\d{2} 오더\]\s*/g, "").replace(/[^가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9 .,\-]/g, " ").replace(/\s+/g, " ").trim().slice(0, n);
+async function exportToday() {
   const list = todayList(); if (!list.length) { toast("오늘 송장 목록이 비어 있어요", "warn"); return; }
-  const H = ["받는사람명", "받는사람 전화번호", "받는사람 우편번호", "받는사람 주소", "받는사람 상세주소", "품목명", "수량", "배송메시지", "운송장번호"];
-  const rows = list.map((c) => { const it = arr(c.history).filter((h) => isToday(h.date)).map((h) => h.text).join(" / ") || c.memo || ""; return [c.name, c.phone, c.zip, c.address, c.address_detail, it, 1, "", c.tracking]; });
-  const ws = XLSX.utils.aoa_to_sheet([H, ...rows]); ws["!cols"] = [10, 15, 10, 40, 22, 30, 6, 20, 15].map((w) => ({ wch: w }));
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "오늘송장"); saveWorkbook(wb, `${fileTag()}_오늘송장_${toShort(new Date())}.xlsx`);
+  const noAddr = list.filter((c) => !c.address || digits(c.phone).length < 10);
+  if (noAddr.length && !(await modal({ title: "주소·전화번호 확인 필요", message: `${noAddr.map((c) => c.name).join(", ")} — 주소나 전화번호가 비어 있어 LoIS에서 오류가 날 수 있어요. 그래도 만들까요?`, okText: "그래도 만들기" }))) return;
+  const rows = list.map((c) => {
+    const it = loisSafe(arr(c.history).filter((h) => isToday(h.date)).map((h) => h.text).join(", ") || c.memo, 70);
+    const addr = [c.address, c.address_detail].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    return ["", "", c.name || "", fmtPhone(c.phone), "", c.zip || "", addr, "", orderNo(c), it, 1, "", "", loisSafe(String(c.memo || "").split(/\s*[,/]\s*/).filter((x) => MEMO.test(x) && !/킵/.test(x)).join(" "), 45), "", it, ""];
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = [4, 8, 10, 15, 6, 7, 50, 6, 16, 30, 4, 4, 4, 20, 4, 30, 4].map((w) => ({ wch: w }));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+  saveWorkbook(wb, `LoIS대량접수_${fileTag()}_${ymdOf()}_${rows.length}건.xlsx`);
+  modal({ title: `📦 LoIS 대량접수 파일 ${rows.length}건 완성`, okText: "확인",
+    bodyHTML: `<ol style="margin:0;padding-left:18px;line-height:1.8"><li>LoIS › <b>예약 › 기업고객파일접수</b></li><li><b>형식명</b>에서 <b>‘수하인 형식(통합형)’</b> 선택</li><li><b>타이틀있음 체크 해제</b> (제목줄 없는 파일이에요)</li><li>[찾기]로 방금 받은 파일 선택 → 업로드</li><li>오류 없으면 <b>[접수확정] → [운송장출력]</b></li><li>송장번호가 나오면 택배 센터 <b>🧾 송장 일괄입력</b>에 붙여넣기 (주문번호 ${orderNo(list[0])} 형식으로도 자동 매칭)</li></ol>` });
 }
 function exportBook() {
   const H = ["이름", "오더 닉네임", "전화번호", "우편번호", "주소", "상세주소", "기타", "주문횟수", "단골", "킵", "송장번호"];
@@ -2034,10 +2046,12 @@ function parseBulk(text) {
   const res = [];
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim(); if (!line) continue;
-    const pm = line.match(PHONE); const rest = pm ? line.replace(pm[0], " ") : line;
+    const pm = line.match(PHONE); const rest = (pm ? line.replace(pm[0], " ") : line).replace(/HM\d{6}-[A-Z0-9]{2,4}/gi, " ");
     const tm = rest.replace(/(\d)[-\s](?=\d)/g, "$1").match(/(?<!\d)\d{10,12}(?!\d)/);
     if (!tm) { res.push({ line, err: "송장번호 없음" }); continue; }
-    let c = pm ? byPhone(pm[0]) : null;
+    const om = line.match(/HM\d{6}-[A-Z0-9]{2,4}/i);
+    let c = om ? P.list.find((x) => orderNo(x) === om[0].toUpperCase()) : null;
+    if (!c && pm) c = byPhone(pm[0]);
     if (!c) { const hits = P.list.filter((x) => x.name && line.includes(x.name)); if (hits.length === 1) c = hits[0]; else if (hits.length > 1) { res.push({ line, err: "같은 이름 여러 명" }); continue; } }
     res.push(c ? { line, c, trk: tm[0] } : { line, err: "고객 못 찾음" });
   }
@@ -2059,7 +2073,7 @@ function ordersHTML() {
   h += `<div class="pc-sum">주문자 <b>${rows.length}명</b> · 연결됨 ${ready.length + unpaid.length + done.length} · <b class="pc-acc">주소 필요 ${need.length}</b></div>`;
   if (ready.length) h += `<button class="btn primary pc-wide" data-pact="all">✓ 입금·주소 확인된 ${ready.length}명 한 번에 송장 목록에 추가</button>`;
   if (need.length) h += `<button class="btn pc-wide pc-orange" data-pact="needall">✎ 주소 필요 ${need.length}명 연속 등록 (카톡 붙여넣기 → Ctrl+Enter → 자동 다음)</button>`;
-  if (!ready.length && !need.length && done.length) h += `<div class="pc-done">✓ 이 방송 정리 끝! <button class="btn sm primary" data-pact="xls">⬇ 오늘 송장엑셀</button></div>`;
+  if (!ready.length && !need.length && done.length) h += `<div class="pc-done">✓ 이 방송 정리 끝! <button class="btn sm primary" data-pact="xls">⬇ LoIS 대량접수 엑셀</button></div>`;
   const one = (x) => {
     const r = x.r, c = x.c;
     const head = `<div class="pc-oh"><b>${H(r.name)}</b>${r.paid ? "" : ' <span class="pc-tag warn">미입금</span>'} <small class="muted">${won(r.amount)} · ${r.n}건</small></div><div class="pc-it">${H(r.items)}</div>`;
@@ -2128,7 +2142,7 @@ function openCenter(view) {
   if (!root) {
     root = document.createElement("div"); root.id = "pcRoot";
     root.innerHTML = `<div class="pc-bar"><b>📦 택배 센터</b><span class="pc-sync muted">주소록 ${P.list.length}명</span><span style="flex:1"></span>
-      <button class="btn sm" data-pact="bulk">🧾 송장 일괄입력</button><button class="btn sm" data-pact="xls">⬇ 오늘 송장엑셀</button><button class="btn sm desk-only" data-pact="book">⬇ 주소록</button><button class="btn sm" data-pact="close">✕ 닫기</button></div>
+      <button class="btn sm" data-pact="bulk">🧾 송장 일괄입력</button><button class="btn sm" data-pact="xls">⬇ LoIS 대량접수 엑셀</button><button class="btn sm desk-only" data-pact="book">⬇ 주소록</button><button class="btn sm" data-pact="close">✕ 닫기</button></div>
       <div class="pc-tabs"><button data-pview="orders">🧾 방송 주문</button><button data-pview="list">📋 송장 목록</button><button data-pview="input">💬 카톡 입력</button><button data-pview="card">📦 송장 카드</button></div>
       <div class="pc-grid"><section class="pc-col" id="pcOrders"></section><section class="pc-col" id="pcList"></section><section class="pc-col pc-side"><div class="pc-side-tabs"><button data-pview="card">📦 송장 카드</button><button data-pview="input">💬 카톡·새 고객</button></div><div id="pcCard"></div><div id="pcInput"></div></section></div><datalist id="pcBook"></datalist>`;
     document.body.appendChild(root); bindCenter(root);

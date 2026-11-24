@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="google" content="notranslate">
 <title>혜마켓 오더</title>
+<script>try{if(/^#(parcel|택배)$/.test(decodeURIComponent(location.hash))){document.documentElement.classList.add("pc-only");document.title="혜마켓 택배센터";}}catch(e){}</script>
 <meta name="theme-color" content="#0e1320">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="라이브오더">
@@ -229,6 +230,7 @@ td.amt{color:var(--primary);font-weight:600}
 /* ───────── 📦 택배 센터 ───────── */
 #pcRoot{position:fixed;inset:0;z-index:80;background:var(--bg);display:flex;flex-direction:column;--pcb:#0b4ea2;--pco:#ef7d00}
 #pcRoot.hide{display:none}
+html.pc-only header,html.pc-only #app{display:none!important}
 .pc-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 14px;background:var(--pcb);color:#fff}
 .pc-bar b{font-size:16px}.pc-bar .muted{color:rgba(255,255,255,.75);font-size:12px}
 .pc-bar .btn{color:#fff;border-color:rgba(255,255,255,.35)}
@@ -2142,12 +2144,12 @@ function openCenter(view) {
   if (!root) {
     root = document.createElement("div"); root.id = "pcRoot";
     root.innerHTML = `<div class="pc-bar"><b>📦 택배 센터</b><span class="pc-sync muted">주소록 ${P.list.length}명</span><span style="flex:1"></span>
-      <button class="btn sm" data-pact="bulk">🧾 송장 일괄입력</button><button class="btn sm" data-pact="xls">⬇ LoIS 대량접수 엑셀</button><button class="btn sm desk-only" data-pact="book">⬇ 주소록</button><button class="btn sm" data-pact="close">✕ 닫기</button></div>
+      <button class="btn sm" data-pact="bulk">🧾 송장 일괄입력</button><button class="btn sm" data-pact="xls">⬇ LoIS 대량접수 엑셀</button><button class="btn sm desk-only" data-pact="book">⬇ 주소록</button><button class="btn sm" data-pact="close">${document.documentElement.classList.contains("pc-only") ? "📋 주문 화면" : "✕ 닫기"}</button></div>
       <div class="pc-tabs"><button data-pview="orders">🧾 방송 주문</button><button data-pview="list">📋 송장 목록</button><button data-pview="input">💬 카톡 입력</button><button data-pview="card">📦 송장 카드</button></div>
       <div class="pc-grid"><section class="pc-col" id="pcOrders"></section><section class="pc-col" id="pcList"></section><section class="pc-col pc-side"><div class="pc-side-tabs"><button data-pview="card">📦 송장 카드</button><button data-pview="input">💬 카톡·새 고객</button></div><div id="pcCard"></div><div id="pcInput"></div></section></div><datalist id="pcBook"></datalist>`;
     document.body.appendChild(root); bindCenter(root);
   }
-  root.classList.remove("hide"); document.body.style.overflow = "hidden";
+  root.classList.remove("hide"); document.body.style.overflow = "hidden"; if (document.documentElement.classList.contains("pc-only")) document.title = "혜마켓 택배센터";
   root.querySelector(".pc-sync").textContent = `주소록 ${P.list.length}명`;
   paint();
 }
@@ -2182,7 +2184,7 @@ function bindCenter(root) {
     if (d.pnew) { const r = rowsOf(P.date).find((x) => x.name === d.pnew); P.pend = { nick: r.name, date: P.date, items: r.items }; P.view = "input"; P.forceInput = true; paint(); setTimeout(() => $("#pcKakao") && $("#pcKakao").focus(), 30); return; }
     if (d.psave !== undefined) { const p = (P.parsed || []).filter((x) => x.name || x.phone || x.address)[+d.psave]; if (p) saveOrder(p); return; }
     switch (d.pact) {
-      case "close": closeCenter(); break;
+      case "close": if (document.documentElement.classList.contains("pc-only")) { document.documentElement.classList.remove("pc-only"); document.title = "혜마켓 오더"; history.replaceState(null, "", location.pathname + location.search); } closeCenter(); break;
       case "bulk": openBulk(); break;
       case "xls": exportToday(); break;
       case "book": exportBook(); break;
@@ -2220,7 +2222,7 @@ function bindCenter(root) {
   });
   document.addEventListener("keydown", (e) => {
     if (!P.open || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === "Escape" && !$("#modalRoot").innerHTML) { closeCenter(); return; }
+    if (e.key === "Escape" && !$("#modalRoot").innerHTML) { if (!document.documentElement.classList.contains("pc-only")) closeCenter(); return; }
     if (e.target.closest && e.target.closest("input,textarea,select")) return; if ($("#modalRoot").innerHTML) return;
     const act = { "1": "lois", "2": "addr", n: "next", N: "next" }[e.key]; if (!act) return;
     const b = root.querySelector(`#pcCard [data-pact="${act}"]`); if (b) { e.preventDefault(); if (window.innerWidth <= 900) { P.view = "card"; paint(); } b.click(); }

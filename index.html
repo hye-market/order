@@ -550,10 +550,39 @@ function touch(...tables) {
   tables.forEach((t) => W.dirty.add(t)); clearTimeout(W.t);
   W.t = setTimeout(async () => { const ts = [...W.dirty]; W.dirty.clear(); try { await Promise.all(ts.map((t) => loaders[t]())); } catch (e) { console.error(e); } render(); }, 250);
 }
+/* 주문 한 건이 바뀔 때마다 전체 주문을 다시 받지 않아요.
+   · 내 기기에서 바꾼 것: 화면에 바로 반영 → 2.5초 뒤 합계(누적 미입금·저장공간)만 새로
+   · 다른 기기에서 바꾼 것: 실시간으로 받은 그 한 건만 반영
+   · 혹시 빠진 게 있을까 봐 조용해지면(1분) 한 번 전체를 맞춰요 */
+const SOFT = { t: null, full: null };
+function softSync() {
+  clearTimeout(SOFT.t); SOFT.t = setTimeout(() => { loadUsage(); loadYearUnpaid(); }, 2500);
+  clearTimeout(SOFT.full); SOFT.full = setTimeout(quietReload, 60000);
+}
+async function quietReload() {
+  if (document.visibilityState !== "visible" || S.editingId) { SOFT.full = setTimeout(quietReload, 60000); return; }
+  try { await loaders.orders(); render(); } catch (e) { console.warn(e); }
+}
+function applyOrderEvent(p) {
+  if (!p || !p.eventType) { touch("orders"); return; }
+  if (p.eventType === "DELETE") {
+    const id = p.old && p.old.id; if (!id) { touch("orders"); return; }
+    const n = S.orders.length; S.orders = S.orders.filter((o) => o.id !== id); if (S.orders.length !== n) render();
+  } else {
+    const r = p.new; if (!r || !r.id) { touch("orders"); return; }
+    if (r.shop_id && SHOP && r.shop_id !== SHOP) return;
+    const n = fromOrder(r);
+    const ex = S.orders.find((o) => o.id === n.id);
+    if (ex) Object.assign(ex, n);
+    else if (!S.cutoff || S.allLoaded || String(n.date) >= String(S.cutoff)) S.orders.push(n);
+    render();
+  }
+  softSync();
+}
 const api = {
   async addOrder(o) {
     const d = await q(sb.from("orders").insert({ shop_id: SHOP, ...toOrder(o) }).select().single());
-    const n = fromOrder(d); if (!S.orders.some((x) => x.id === n.id)) S.orders.push(n); render(); touch("orders"); return n;
+    const n = fromOrder(d); if (!S.orders.some((x) => x.id === n.id)) S.orders.push(n); render(); softSync(); return n;
   },
   async addOrders(list, label) {
     const parts = chunk(list, 300); let done = 0;
@@ -562,14 +591,14 @@ const api = {
   },
   async updateOrder(id, u) {
     await q(sb.from("orders").update(toOrder(u)).eq("id", id));
-    const o = S.orders.find((x) => x.id === id); if (o) Object.assign(o, u); render(); touch("orders");
+    const o = S.orders.find((x) => x.id === id); if (o) Object.assign(o, u); render(); softSync();
   },
   async deleteOrders(ids, label) {
     let done = 0;
     for (const part of chunk(ids, 200)) { if (label) busy(`${label} (${done}/${ids.length})`); await q(sb.from("orders").delete().in("id", part)); done += part.length; }
-    const set = new Set(ids); S.orders = S.orders.filter((o) => !set.has(o.id)); render(); touch("orders");
+    const set = new Set(ids); S.orders = S.orders.filter((o) => !set.has(o.id)); render(); softSync();
   },
-  async markAllPaid() { await q(sb.from("orders").update({ is_paid: true }).eq("shop_id", SHOP).eq("is_paid", false)); S.orders.forEach((o) => { o.isPaid = true; }); render(); touch("orders"); },
+  async markAllPaid() { await q(sb.from("orders").update({ is_paid: true }).eq("shop_id", SHOP).eq("is_paid", false)); S.orders.forEach((o) => { o.isPaid = true; }); render(); softSync(); },
   async upsertCust(rows) {
     for (const part of chunk(rows, 300)) await q(sb.from("customer_totals").upsert(part.map((r) => ({ shop_id: SHOP, customer_name: r.customerName, total: Math.round(r.total), updated_at: Date.now() })), { onConflict: "shop_id,customer_name" }));
     touch("customer_totals");
@@ -591,7 +620,7 @@ const api = {
       await q(sb.from("orders").delete().in("id", part.map((o) => o.id)));
     }
     const set = new Set(list.map((o) => o.id)); S.orders = S.orders.filter((o) => !set.has(o.id));
-    S.trash = [...list.map((o) => ({ ...o, deletedAt: now })), ...S.trash.filter((t) => !set.has(t.id))]; render(); touch("orders", "trash");
+    S.trash = [...list.map((o) => ({ ...o, deletedAt: now })), ...S.trash.filter((t) => !set.has(t.id))]; render(); touch("trash"); softSync();
   },
   async restoreOrders(list) {
     for (const part of chunk(list, 200)) {
@@ -720,7 +749,7 @@ function derive() {
 }
 const isVipPick = (name) => !!name && (S.config.vipNames || []).includes(name);
 const vip = (t, name) => (isVipPick(name) ? "💎 VIP" : (S.config.vipAuto !== false && Number(t) >= Number(S.config.vipLine || 500000)) ? "💎 VIP" : "🟢 일반");
-async function patchConfig(p) { const prev = S.config; const c = { ...S.config, ...p }; S.config = { ...DEFAULT_CONFIG, ...c }; render(); try { await api.setConfig(c); } catch (e) { console.error(e); S.config = prev; render(); toast(errMsg(e), "err"); } }
+async function patchConfig(p) { const prev = S.config; const c = { ...S.config, ...p }; S.config = { ...DEFAULT_CONFIG, ...c }; render(); try { await api.setConfig(c); } catch (e) { console.error(e); S.config = prev; invalidateHTML(); render(); toast(errMsg(e), "err"); } }
 
 /* ───────── render ───────── */
 function applyTheme() {
@@ -731,7 +760,18 @@ function applyTheme() {
   $("#brandName").textContent = (name ? name + " " : "") + "LIVE ORDER";
   document.title = (name || "라이브") + " 오더";
 }
+/* ───────── 화면 그리기 최적화 ─────────
+   · render(): 같은 순간에 여러 번 불러도 다음 화면 프레임에 1번만 그려요
+   · setHTML(): 내용이 그대로면 다시 그리지 않아요 */
+let RENDER_PENDING = false, HTML_V = 0;
 function render() {
+  if (RENDER_PENDING) return; RENDER_PENDING = true;
+  requestAnimationFrame(() => { if (RENDER_PENDING) renderNow(); });
+}
+function invalidateHTML() { HTML_V++; }
+function setHTML(el, html) { if (!el) return false; const k = HTML_V + "\u0000" + html; if (el.__html === k) return false; el.__html = k; el.innerHTML = html; return true; }
+function renderNow() {
+  RENDER_PENDING = false;
   if (S.mode === "loading") return;
   $("#loading").classList.add("hide"); $("#app").classList.remove("hide");
   applyTheme();
@@ -753,9 +793,9 @@ function renderMetrics(D) {
   const P = D.profitInfo;
   const pSub = `원가표 ${P.costHit}건 · 그 외 ${D.rate}%${P.cardFee ? ` · 카드 −${won(P.cardFee)}` : ""}${P.shipCost ? ` · 택배 ${P.ships}건 −${won(P.shipCost)}` : ""}`;
   const pTip = `계산 방법\n· 원가표에 있는 상품: (판매가 − 원가) × 수량\n· 원가표에 없는 상품: 판매가 × ${D.rate}%\n· 카드 결제 금액 × ${S.config.cardFee || 0}% 수수료 빼기\n· 택배·포장비: 같은 날 같은 고객 = 1건으로 계산해서 빼기\n(입금·카드 완료된 이번 달 주문만 계산)`;
-  $("#metrics").innerHTML = `<div class="metrics" style="margin-bottom:8px">
+  setHTML($("#metrics"), `<div class="metrics" style="margin-bottom:8px">
     ${card("당일 판매총액", m.dTotal, "c-primary", "📈")}${card("당일 입금액", m.dPaid, "c-success", "✔")}${card("당일 미입금", m.dUnpaid, "c-danger", "⚠")}</div>
-    <div class="metrics">${card("월 판매총액", m.mTotal, "c-primary", "🗓")}${card("월 순매출(입금)", m.mPaid, "c-success", "💳")}${card("월 순이익(추정)", m.mProfit, "c-primary", "🐷", pSub, pTip)}</div>`;
+    <div class="metrics">${card("월 판매총액", m.mTotal, "c-primary", "🗓")}${card("월 순매출(입금)", m.mPaid, "c-success", "💳")}${card("월 순이익(추정)", m.mProfit, "c-primary", "🐷", pSub, pTip)}</div>`);
 }
 function renderFormMeta() {
   $("#calLabel").textContent = S.formDate;
@@ -784,6 +824,16 @@ function renderFilters(D) {
   else note.classList.add("hide");
   $("#listCount").textContent = `${D.sorted.length}건 · ${S.showAll ? "전체 날짜" : S.dateFilter}`;
 }
+const TABLE_PAGE = 300;
+// 줄마다 내용이 그대로면 전에 만든 줄을 다시 써요
+function cachedRow(wrap, o, mobile, build) {
+  const rc = wrap.__rc || (wrap.__rc = new Map());
+  const sig = [HTML_V, mobile ? 1 : 0, o.date, o.customerName, o.productNumber, o.size, o.quantity, o.unitPrice, o.isPaid ? 1 : 0, o.isCard ? 1 : 0, S.selected.has(o.id) ? 1 : 0, S.editingId === o.id ? JSON.stringify(S.editData) : ""].join("\u0001");
+  const c = rc.get(o.id); if (c && c.sig === sig) return c.html;
+  const html = build(); rc.set(o.id, { sig, html });
+  if (rc.size > 5000) rc.clear();
+  return html;
+}
 function renderTable(D) {
   const wrap = $("#tableWrap");
   const ae = document.activeElement;
@@ -794,12 +844,17 @@ function renderTable(D) {
   $("#bTrash").innerHTML = `<span class="always" style="display:inline">♻ 휴지통${S.trash.length ? ` ${S.trash.length}` : ""}</span>`;
   const del = $("#bDelSel"); del.classList.toggle("hide", !S.selected.size); del.innerHTML = `<span class="always" style="display:inline">🗑 ${S.selected.size}건 삭제</span>`;
   const allSel = D.sorted.length > 0 && D.sorted.every((o) => S.selected.has(o.id));
-  if (window.matchMedia("(max-width:700px)").matches) {
-    let c = `<div class="row between" style="padding:8px 12px;border-bottom:1px solid var(--border)"><label class="chk" style="height:34px"><input type="checkbox" data-act="selall" ${allSel ? "checked" : ""}>전체 선택</label><span class="muted" style="font-size:12px">✏ 누르면 수정</span></div><div class="ocards">`;
-    if (!D.sorted.length) c += `<div class="empty">주문이 없습니다</div>`;
-    for (const o of D.sorted) {
+  const mobile = window.matchMedia("(max-width:700px)").matches;
+  // 한 번에 300건까지만 그려요 (더 보기로 300건씩 추가) — 전체 날짜 보기에서도 버벅이지 않게
+  const limit = S.tableLimit || TABLE_PAGE; const list = D.sorted.slice(0, limit); const rest = D.sorted.length - list.length;
+  const moreBtn = rest > 0 ? `<button class="more" data-act="tmore" style="width:100%">▼ ${Math.min(rest, TABLE_PAGE)}건 더 보기 (남은 ${rest.toLocaleString()}건)</button>` : "";
+  let head, foot, rows;
+  if (mobile) {
+    head = `<div class="row between" style="padding:8px 12px;border-bottom:1px solid var(--border)"><label class="chk" style="height:34px"><input type="checkbox" data-act="selall" ${allSel ? "checked" : ""}>전체 선택</label><span class="muted" style="font-size:12px">✏ 누르면 수정</span></div><div class="ocards">`;
+    foot = `</div>` + moreBtn;
+    rows = list.map((o) => cachedRow(wrap, o, mobile, () => {
       const id = esc(o.id), a = amt(o);
-      c += `<div class="ocard ${S.selected.has(o.id) ? "sel" : ""}">
+      return `<div class="ocard ${S.selected.has(o.id) ? "sel" : ""}">
         <input type="checkbox" data-act="sel" data-id="${id}" ${S.selected.has(o.id) ? "checked" : ""} style="grid-row:1/3">
         <div class="who"><button type="button" class="linkbtn" data-act="cust" data-name="${esc(o.customerName)}">${esc(o.customerName)}</button><small>${esc(o.date)}</small></div>
         <div class="money" ${a < 0 ? 'style="color:var(--danger)"' : ""}>${won(a)}<small>${o.unitPrice ? won(o.unitPrice) : "0원"} × ${esc(o.quantity)}</small></div>
@@ -809,25 +864,32 @@ function renderTable(D) {
           <label class="pill card ${o.isCard ? "on" : ""}"><input type="checkbox" data-act="card" data-id="${id}" ${o.isCard ? "checked" : ""}>💳 카드</label>
           ${isAutoShip(o) ? `<button class="ib w" data-act="shipdel" data-id="${id}" title="이 고객 택배비 빼기" style="margin-left:auto;color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>` : ""}<button class="ib w" data-act="medit" data-id="${id}" title="수정" ${isAutoShip(o) ? "" : 'style="margin-left:auto"'}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button>
         </div></div>`;
-    }
-    wrap.innerHTML = c + `</div>`;
-    return;
-  }
-  let h = `<table><thead><tr><th class="c" style="width:38px"><input type="checkbox" data-act="selall" ${allSel ? "checked" : ""} title="보이는 주문 전체 선택"></th><th>날짜</th><th>고객명</th><th>상품/품목</th><th>사이즈</th><th class="r">수량</th><th class="r">단가</th><th class="r">합계</th><th class="c">입금</th><th class="c">카드</th><th class="c">수정</th></tr></thead><tbody>`;
-  if (!D.sorted.length) h += `<tr><td colspan="11" class="empty">주문이 없습니다</td></tr>`;
-  for (const o of D.sorted) {
-    const id = esc(o.id);
+    }));
+    if (!list.length) rows = [`<div class="empty">주문이 없습니다</div>`];
+  } else {
+    head = `<table><thead><tr><th class="c" style="width:38px"><input type="checkbox" data-act="selall" ${allSel ? "checked" : ""} title="보이는 주문 전체 선택"></th><th>날짜</th><th>고객명</th><th>상품/품목</th><th>사이즈</th><th class="r">수량</th><th class="r">단가</th><th class="r">합계</th><th class="c">입금</th><th class="c">카드</th><th class="c">수정</th></tr></thead><tbody>`;
+    foot = "</tbody></table>" + moreBtn;
+    rows = list.map((o) => cachedRow(wrap, o, mobile, () => {
+      const id = esc(o.id);
     const chk = `<td class="c"><input type="checkbox" data-act="sel" data-id="${id}" ${S.selected.has(o.id) ? "checked" : ""}></td>`;
     const pay = `<td class="c"><input type="checkbox" data-act="paid" data-id="${id}" ${o.isPaid ? "checked" : ""}></td><td class="c"><input type="checkbox" data-act="card" data-id="${id}" ${o.isCard ? "checked" : ""}></td>`;
     if (S.editingId === o.id) {
       const e = S.editData; const f = (k, t = "text", w = "") => `<td style="padding:5px 6px"><input class="inp sm" data-edit="${k}" type="${t}" value="${esc(e[k])}" style="${w}"></td>`;
-      h += `<tr>${chk}${f("date", "text", "width:84px")}${f("customerName")}${f("productNumber")}${f("size", "text", "width:70px")}${f("quantity", "number", "width:64px;text-align:right")}${f("unitPrice", "number", "width:90px;text-align:right")}<td class="r amt">${won((Number(e.quantity) || 0) * (Number(e.unitPrice) || 0))}</td>${pay}<td class="c"><button class="ib" data-act="save" data-id="${id}" title="저장" style="color:var(--success)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 5 5L20 7"/></svg></button><button class="ib" data-act="cancel" title="취소" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`;
+      return `<tr>${chk}${f("date", "text", "width:84px")}${f("customerName")}${f("productNumber")}${f("size", "text", "width:70px")}${f("quantity", "number", "width:64px;text-align:right")}${f("unitPrice", "number", "width:90px;text-align:right")}<td class="r amt">${won((Number(e.quantity) || 0) * (Number(e.unitPrice) || 0))}</td>${pay}<td class="c"><button class="ib" data-act="save" data-id="${id}" title="저장" style="color:var(--success)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 5 5L20 7"/></svg></button><button class="ib" data-act="cancel" title="취소" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td></tr>`;
     } else {
       const a = amt(o);
-      h += `<tr>${chk}<td>${esc(o.date)}</td><td style="font-weight:600"><button type="button" class="linkbtn" data-act="cust" data-name="${esc(o.customerName)}">${esc(o.customerName)}</button></td><td>${esc(o.productNumber)}</td><td>${esc(o.size)}</td><td class="r">${esc(o.quantity)}</td><td class="r">${o.unitPrice ? won(o.unitPrice) : ""}</td><td class="r amt" ${a < 0 ? 'style="color:var(--danger)"' : ""}>${a ? won(a) : ""}</td>${pay}<td class="c" style="white-space:nowrap">${isAutoShip(o) ? `<button class="ib w" data-act="shipdel" data-id="${id}" title="이 고객 택배비 빼기 (휴지통으로)" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>` : ""}<button class="ib w" data-act="edit" data-id="${id}" title="수정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></td></tr>`;
+      return `<tr>${chk}<td>${esc(o.date)}</td><td style="font-weight:600"><button type="button" class="linkbtn" data-act="cust" data-name="${esc(o.customerName)}">${esc(o.customerName)}</button></td><td>${esc(o.productNumber)}</td><td>${esc(o.size)}</td><td class="r">${esc(o.quantity)}</td><td class="r">${o.unitPrice ? won(o.unitPrice) : ""}</td><td class="r amt" ${a < 0 ? 'style="color:var(--danger)"' : ""}>${a ? won(a) : ""}</td>${pay}<td class="c" style="white-space:nowrap">${isAutoShip(o) ? `<button class="ib w" data-act="shipdel" data-id="${id}" title="이 고객 택배비 빼기 (휴지통으로)" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>` : ""}<button class="ib w" data-act="edit" data-id="${id}" title="수정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></td></tr>`;
     }
+    }));
+    if (!list.length) rows = [`<tr><td colspan="11" class="empty">주문이 없습니다</td></tr>`];
   }
-  wrap.innerHTML = h + "</tbody></table>";
+  // 틀(제목줄·더보기)이 같고 줄 수가 같으면 바뀐 줄만 바꿔 끼워요
+  const frame = HTML_V + "|" + head + "|" + foot;
+  const prev = wrap.__rows, box = mobile ? wrap.querySelector(".ocards") : wrap.querySelector("tbody");
+  if (wrap.__frame === frame && prev && prev.length === rows.length && box && box.children.length === rows.length) {
+    for (let i = 0; i < rows.length; i++) if (rows[i] !== prev[i]) box.children[i].outerHTML = rows[i];
+  } else wrap.innerHTML = head + rows.join("") + foot;
+  wrap.__frame = frame; wrap.__rows = rows; wrap.__html = null;
 }
 function panel(key, title, data, { grade = false, check = false, excel = null, copy = false, copyYear = false } = {}) {
   const sorted = [...data].sort((a, b) => (b.total || 0) - (a.total || 0));
@@ -894,11 +956,11 @@ async function loadYearUnpaid() {
 function renderPanels(D) {
   const yy = String(S.dateFilter || toShort(new Date())).slice(0, 2);
   if (S.yearUnpaid && S.yearUnpaid.yy !== yy && !S.yearUnpaidLoading) { S.yearUnpaidLoading = true; loadYearUnpaid().finally(() => { S.yearUnpaidLoading = false; }); }
-  $("#panels3").innerHTML = panelBuyPaid(D) + `<div class="stack">`
+  setHTML($("#panels3"), panelBuyPaid(D) + `<div class="stack">`
     + panel("unpaid", `⚠ ${S.showAll ? "전체" : "당일"} 고객별 미입금 <span class='muted' style='font-size:11px;font-weight:400'>📋 = 입금 안내 복사</span>`, D.unpaidCust, { copy: true })
     + panel("yearunpaid", `📌 고객별 누적 미입금 <span class='muted' style='font-size:11px;font-weight:400'>20${yy}년 전체</span>`, yearUnpaidRows(), { excel: `누적_미입금_20${yy}년`, copyYear: true })
-    + `</div>`;
-  $("#panels2").innerHTML = panel("monthly", "📆 월 누적 합계", D.monthlyCust, { grade: true, excel: "월_누적_합계" }) + panel("grand", "👥 고객별 총 누적 합계", D.grandCust, { grade: true, excel: "고객별_총_누적_합계" });
+    + `</div>`);
+  setHTML($("#panels2"), panel("monthly", "📆 월 누적 합계", D.monthlyCust, { grade: true, excel: "월_누적_합계" }) + panel("grand", "👥 고객별 총 누적 합계", D.grandCust, { grade: true, excel: "고객별_총_누적_합계" }));
 }
 function renderProducts(D) {
   const m = {};
@@ -909,19 +971,19 @@ function renderProducts(D) {
   if (!rows.length) { el.classList.add("hide"); return; }
   el.classList.remove("hide");
   const exp = !!S.expanded.products; const vis = exp ? rows : rows.slice(0, 10);
-  el.innerHTML = `<div class="row between"><h2 class="ttl">📦 상품/품목별 수량</h2><button class="btn sm" data-act="prodexcel"><span class="always" style="display:inline">⬇ 엑셀</span></button></div><div class="list">${vis.map((r, i) => `<div class="item"><div class="l"><span class="n">${i + 1}</span><span class="nm">${esc(r.product)}</span></div><span class="v">${r.quantity}개</span></div>`).join("")}</div>${rows.length > 10 ? `<button class="more" data-act="more" data-key="products">${exp ? "▲ 접기" : `▼ 더보기 (${rows.length - 10}개)`}</button>` : ""}`;
+  setHTML(el, `<div class="row between"><h2 class="ttl">📦 상품/품목별 수량</h2><button class="btn sm" data-act="prodexcel"><span class="always" style="display:inline">⬇ 엑셀</span></button></div><div class="list">${vis.map((r, i) => `<div class="item"><div class="l"><span class="n">${i + 1}</span><span class="nm">${esc(r.product)}</span></div><span class="v">${r.quantity}개</span></div>`).join("")}</div>${rows.length > 10 ? `<button class="more" data-act="more" data-key="products">${exp ? "▲ 접기" : `▼ 더보기 (${rows.length - 10}개)`}</button>` : ""}`);
 }
 function renderCosts(D) {
   const names = Object.keys(S.costs).sort(cmp);
   const monthProducts = [...new Set(D.monthly.filter((o) => !isExtra(o)).map((o) => String(o.productNumber || "").trim()).filter(Boolean))].sort(cmp);
   const missing = monthProducts.filter((p) => !(p in S.costs));
-  $("#costMissing").innerHTML = missing.length
+  setHTML($("#costMissing"), missing.length
     ? `<div class="muted" style="font-size:12px;margin-top:10px">이번 달 원가 미등록 상품 ${missing.length}개 (눌러서 입력):</div><div class="row" style="gap:6px;margin-top:6px">${missing.slice(0, 30).map((p) => `<button class="btn sm" data-act="costpick" data-name="${esc(p)}"><span class="always" style="display:inline">${esc(p)}</span></button>`).join("")}${missing.length > 30 ? `<span class="muted" style="font-size:12px">외 ${missing.length - 30}개</span>` : ""}</div>`
-    : (monthProducts.length ? `<div class="muted" style="font-size:12px;margin-top:10px">✅ 이번 달 상품은 모두 원가가 등록되어 있어요</div>` : "");
+    : (monthProducts.length ? `<div class="muted" style="font-size:12px;margin-top:10px">✅ 이번 달 상품은 모두 원가가 등록되어 있어요</div>` : ""));
   const exp = !!S.expanded.costs; const vis = exp ? names : names.slice(0, 10);
-  $("#costList").innerHTML = names.length
+  setHTML($("#costList"), names.length
     ? `<div class="list">${vis.map((p, i) => `<div class="item"><div class="l"><span class="n">${i + 1}</span><span class="nm">${esc(p)}</span></div><span class="row" style="gap:4px;flex-wrap:nowrap"><span class="v">${won(S.costs[p])}</span><button class="ib w" data-act="costedit" data-name="${esc(p)}" title="수정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button class="ib w" data-act="costdel" data-name="${esc(p)}" title="삭제" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6 6 18"/></svg></button></span></div>`).join("")}</div>${names.length > 10 ? `<button class="more" data-act="more" data-key="costs">${exp ? "▲ 접기" : `▼ 더보기 (${names.length - 10}개)`}</button>` : ""}`
-    : `<p class="muted" style="font-size:12.5px;margin:12px 0 0">아직 등록된 원가가 없어요. 원가가 없는 상품은 설정의 순이익 비율로 계산돼요.</p>`;
+    : `<p class="muted" style="font-size:12.5px;margin:12px 0 0">아직 등록된 원가가 없어요. 원가가 없는 상품은 설정의 순이익 비율로 계산돼요.</p>`);
 }
 function renderStatement() {
   const customers = [...new Set(S.orders.map((o) => o.customerName))].sort(cmp);
@@ -930,11 +992,11 @@ function renderStatement() {
   el.classList.remove("hide");
   if (S.statementCustomer && !customers.includes(S.statementCustomer)) S.statementCustomer = "";
   if (document.activeElement && document.activeElement.id === "stSel") return;
-  el.innerHTML = `<div class="row"><h2 class="ttl" style="margin-right:6px">📄 고객 정산서</h2>
+  setHTML(el, `<div class="row"><h2 class="ttl" style="margin-right:6px">📄 고객 정산서</h2>
     <select class="inp" id="stSel" style="width:auto;min-width:150px;height:32px"><option value="">고객 선택</option>${customers.map((c) => `<option ${c === S.statementCustomer ? "selected" : ""} value="${esc(c)}">${esc(c)}</option>`).join("")}</select>
     <button class="btn sm primary" data-act="stexcel" ${S.statementCustomer ? "" : "disabled"}><span class="always" style="display:inline">⬇ 엑셀</span></button>
     <button class="btn sm" data-act="stcopy" ${S.statementCustomer ? "" : "disabled"}><span class="always" style="display:inline">📋 카톡용 복사</span></button>
-    <button class="btn sm" data-act="cust" data-name="${esc(S.statementCustomer)}" ${S.statementCustomer ? "" : "disabled"}><span class="always" style="display:inline">👤 고객 정보</span></button></div>`;
+    <button class="btn sm" data-act="cust" data-name="${esc(S.statementCustomer)}" ${S.statementCustomer ? "" : "disabled"}><span class="always" style="display:inline">👤 고객 정보</span></button></div>`);
 }
 function renderChart() {
   const n = new Date(); const y = n.getFullYear(), mo = n.getMonth(); const mk = curMonthKey();
@@ -944,7 +1006,7 @@ function renderChart() {
   const pts = Object.entries(day).map(([d, t]) => ({ d: Number(d), t })).sort((a, b) => a.d - b.d);
   const el = $("#chartPanel");
   let h = `<h2 class="ttl">📊 이번달 일별 매출 <span class="muted" style="font-size:12px;font-weight:400">${y}년 ${mo + 1}월</span></h2>`;
-  if (!pts.length) { el.innerHTML = h + `<p class="muted" style="text-align:center;padding:30px 0;margin:0">이번달 매출 데이터 없음</p>`; return; }
+  if (!pts.length) { setHTML(el, h + `<p class="muted" style="text-align:center;padding:30px 0;margin:0">이번달 매출 데이터 없음</p>`); return; }
   const W = 640, H = 230, L = 44, R = 12, T = 14, B = 26, last = new Date(y, mo + 1, 0).getDate();
   const max = Math.max(...pts.map((p) => p.t), 1) * 1.1;
   const X = (d) => L + ((d - 1) / Math.max(last - 1, 1)) * (W - L - R), Y = (t) => T + (1 - t / max) * (H - T - B);
@@ -954,8 +1016,8 @@ function renderChart() {
   for (let i = 0; i <= 3; i++) { const v = (max / 3) * i, yy = Y(v); grid += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="var(--border)" stroke-dasharray="3 4"/><text x="${L - 6}" y="${yy + 4}" text-anchor="end">${v >= 10000 ? Math.round(v / 1000) + "k" : Math.round(v)}</text>`; }
   for (const d of [1, 5, 10, 15, 20, 25, last]) grid += `<text x="${X(d)}" y="${H - 8}" text-anchor="middle">${d}</text>`;
   const dots = pts.map((p) => `<circle cx="${X(p.d).toFixed(1)}" cy="${Y(p.t).toFixed(1)}" r="3.5" fill="var(--primary)"><title>${mo + 1}/${p.d} · ${won(p.t)}</title></circle>`).join("");
-  el.innerHTML = h + `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="이번달 일별 매출 차트"><defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--primary)" stop-opacity=".38"/><stop offset="1" stop-color="var(--primary)" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#gg)"/><path d="${line}" fill="none" stroke="var(--primary)" stroke-width="2.2" stroke-linejoin="round"/>${dots}</svg>
-    <div class="muted" style="font-size:11.5px;margin-top:4px">점 위에 손가락/마우스를 올리면 날짜별 금액이 보여요 · 이번달 합계 <b class="c-primary">${won(pts.reduce((s, p) => s + p.t, 0))}</b></div>`;
+  setHTML(el, h + `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="이번달 일별 매출 차트"><defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--primary)" stop-opacity=".38"/><stop offset="1" stop-color="var(--primary)" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#gg)"/><path d="${line}" fill="none" stroke="var(--primary)" stroke-width="2.2" stroke-linejoin="round"/>${dots}</svg>
+    <div class="muted" style="font-size:11.5px;margin-top:4px">점 위에 손가락/마우스를 올리면 날짜별 금액이 보여요 · 이번달 합계 <b class="c-primary">${won(pts.reduce((s, p) => s + p.t, 0))}</b></div>`);
 }
 
 /* ───────── calendar ───────── */
@@ -977,7 +1039,7 @@ function renderCal() {
 function setDate(full) {
   if (S.cutoff && !S.allLoaded && fullToShort(full) < S.cutoff) ensureAllLoaded("지난 날짜라서 전체 주문을 불러오는 중");
   S.formDate = full; S.dateFilter = fullToShort(full); S.showAll = false; S.calMonth = null;
-  $("#cal").classList.add("hide"); render(); $("#fName").focus();
+  $("#cal").classList.add("hide"); renderNow(); $("#fName").focus();
 }
 
 /* ───────── copy texts ───────── */
@@ -1164,7 +1226,7 @@ function refreshCustList() {
   const names = new Set([...S.orders.map((o) => o.customerName), ...Object.keys(S.customers), ...S.custArchive.map((c) => c.customerName)]);
   const key = [...names].sort(cmp).join("\u0001");
   if (key === refreshCustList.k) return; refreshCustList.k = key;
-  $("#custList").innerHTML = [...names].sort(cmp).map((n) => `<option value="${esc(n)}"></option>`).join("");
+  setHTML($("#custList"), [...names].sort(cmp).map((n) => `<option value="${esc(n)}"></option>`).join(""));
 }
 async function openCustomer(name) {
   const info = S.customers[name] || { phone: "", address: "", memo: "" };
@@ -1458,7 +1520,7 @@ async function addOrder() {
 async function updateOrder(id, u) {
   if (u.isCard === true) u.isPaid = true;
   const before = S.orders.find((x) => x.id === id); const old = before ? [before.date, before.customerName] : null; const wasExtra = before && isExtra(before);
-  try { await api.updateOrder(id, u); } catch (e) { console.error(e); toast(errMsg(e), "err"); render(); return; }
+  try { await api.updateOrder(id, u); } catch (e) { console.error(e); toast(errMsg(e), "err"); invalidateHTML(); render(); return; }
   const now = S.orders.find((x) => x.id === id);
   if (!wasExtra && now && !isExtra(now)) syncExtras([old, [now.date, now.customerName]].filter(Boolean));
 }
@@ -1767,9 +1829,10 @@ function bind() {
   tw.addEventListener("keydown", (e) => { if (!e.target.dataset.edit) return; if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); saveEdit(); } else if (e.key === "Escape") { S.editingId = null; S.editData = {}; render(); } });
   tw.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-act]"); if (!b) return;
-    if (b.dataset.act === "edit") { const o = S.orders.find((x) => x.id === b.dataset.id); if (!o) return; S.editingId = o.id; S.editData = { date: o.date, customerName: o.customerName, productNumber: o.productNumber, size: o.size || "", quantity: o.quantity, unitPrice: o.unitPrice }; render(); const f = tw.querySelector("[data-edit=customerName]"); f && f.focus(); }
+    if (b.dataset.act === "edit") { const o = S.orders.find((x) => x.id === b.dataset.id); if (!o) return; S.editingId = o.id; S.editData = { date: o.date, customerName: o.customerName, productNumber: o.productNumber, size: o.size || "", quantity: o.quantity, unitPrice: o.unitPrice }; renderNow(); const f = tw.querySelector("[data-edit=customerName]"); f && f.focus(); }
     else if (b.dataset.act === "medit") openEditModal(b.dataset.id);
     else if (b.dataset.act === "cust") openCustomer(b.dataset.name);
+    else if (b.dataset.act === "tmore") { S.tableLimit = (S.tableLimit || TABLE_PAGE) + TABLE_PAGE; renderNow(); }
     else if (b.dataset.act === "shipdel") {
       // 자동 택배비 줄 빼기: 휴지통으로 보내면 그날 그 고객은 다시 붙지 않아요
       const o = S.orders.find((x) => x.id === b.dataset.id); if (!o || !S.canWrite) return;
@@ -2274,13 +2337,18 @@ async function startApp(session) {
   if (old.length) api.purgeTrash(old.map((t) => t.id)).catch(() => {});
   // 실시간 반영: 다른 기기에서 바꾼 내용이 바로 보여요
   channel = sb.channel("live-order-" + SHOP);
-  TABLES.forEach((t) => channel.on("postgres_changes", { event: "*", schema: "public", table: t }, () => touch(t)));
+  TABLES.forEach((t) => channel.on("postgres_changes", { event: "*", schema: "public", table: t }, t === "orders" ? applyOrderEvent : () => touch(t)));
   channel.subscribe((status) => {
     if (status === "SUBSCRIBED") { if (S.live === "off") TABLES.forEach((t) => touch(t)); setLive("on"); }
     else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") setLive("off");
   });
   // 화면으로 돌아오면 최신 내용으로
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && SHOP) TABLES.forEach((t) => touch(t)); });
+  // (카톡 보내고 잠깐 돌아온 경우엔 다시 받지 않아요 — 1분 넘게 떠나 있었거나 연결이 끊겼을 때만)
+  let hiddenAt = 0;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+    if (SHOP && (S.live !== "on" || Date.now() - hiddenAt > 60000)) TABLES.forEach((t) => touch(t));
+  });
 }
 async function logout() {
   if (!(await modal({ title: "로그아웃할까요?", message: "다시 들어오려면 아이디와 비밀번호가 필요해요.", okText: "로그아웃" }))) return;

@@ -290,6 +290,9 @@ html.pc-only header,html.pc-only #app{display:none!important}
   #pcRoot[data-view=orders] #pcOrders,#pcRoot[data-view=list] #pcList,#pcRoot[data-view=card] .pc-side,#pcRoot[data-view=input] .pc-side{display:block}
   .pc-bar .btn{height:30px;font-size:12px;padding:0 8px}
 }
+.pvfoot{text-align:center;padding:14px 0 20px;font-size:12px}
+.pvfoot a,.lgpv{color:var(--muted);text-decoration:underline}
+.lgpv{display:block;text-align:center;font-size:11.5px;margin-top:10px}
 </style>
 </head>
 <body class="notranslate" translate="no">
@@ -303,6 +306,7 @@ html.pc-only header,html.pc-only #app{display:none!important}
     <input class="inp" id="lgPw" name="password" type="password" placeholder="비밀번호" autocomplete="current-password">
     <button class="btn primary always" id="lgBtn" type="submit" style="height:44px;width:100%;font-size:15px">로그인</button>
     <div id="lgErr" class="lgerr"></div>
+    <a class="lgpv" href="https://hye-market.github.io/live/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>
   </form>
 </section>
 
@@ -421,6 +425,7 @@ html.pc-only header,html.pc-only #app{display:none!important}
   </section>
   <section class="card pad chart" id="chartPanel"></section>
 </main>
+<footer class="pvfoot"><a href="https://hye-market.github.io/live/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></footer>
 </div>
 
 <div id="toasts"></div>
